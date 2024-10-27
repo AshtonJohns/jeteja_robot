@@ -1,4 +1,4 @@
-# Table of Contexts
+# Table of Contents
 
 1. [Executive Summary](#executive-summary)
 2. [Background and Problem Overview](#background-and-problem-overview) 
