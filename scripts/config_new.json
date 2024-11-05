@@ -12,5 +12,5 @@
     "throttle_fwd_range": 1550000,
     "throttle_rev_range": 1200000,
     "record_btn": 5,
-    "stop_btn_x": 0
+    "stop_btn": 0
 }
