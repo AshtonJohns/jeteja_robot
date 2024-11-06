@@ -30,7 +30,11 @@ RECORD_BUTTON = params['record_btn']
 STOP_BUTTON = params['stop_btn']
 
 # Initialize hardware (serial communication and joystick)
-ser_pico = serial.Serial(port='/dev/ttyACM0', baudrate=115200)
+try:
+    ser_pico = serial.Serial(port='/dev/ttyACM1', baudrate=115200)
+except:
+    ser_pico = serial.Serial(port='/dev/ttyACM0', baudrate=115200)
+
 pygame.display.init()
 pygame.joystick.init()
 js = pygame.joystick.Joystick(0)
@@ -38,16 +42,18 @@ js = pygame.joystick.Joystick(0)
 # Create data directories
 data_dir = os.path.join('data', datetime.now().strftime("%Y-%m-%d-%H-%M"))
 image_dir = os.path.join(data_dir, 'images/')
+depth_image_dir= os.path.join(data_dir, 'depth_images/')
 label_path = os.path.join(data_dir, 'labels.csv')
 os.makedirs(image_dir, exist_ok=True)
+os.makedirs(depth_image_dir, exist_ok=True)
 
 # Initialize RealSense camera pipeline
-pipeline = rs.pipeline()
-config = rs.config()
+pipeline = rs.pipeline() #type:ignore
+config = rs.config() #type:ignore
 
 # Configure RealSense streams (set resolution and FPS)
-config.enable_stream(rs.stream.depth, 848, 480, rs.format.z16, 90)
-config.enable_stream(rs.stream.color, 848, 480, rs.format.bgr8, 60)
+config.enable_stream(rs.stream.depth, 848, 480, rs.format.z16, 90) #type:ignore
+config.enable_stream(rs.stream.color, 848, 480, rs.format.bgr8, 60) #type:ignore
 
 # Start streaming from the camera
 pipeline.start(config)
@@ -86,6 +92,7 @@ try:
 
         # Handle joystick input events
         for e in pygame.event.get():
+            print(e)
             if e.type == pygame.JOYAXISMOTION:
                 ax_val_st = round(js.get_axis(STEERING_AXIS), 2)
                 ax_val_th = round(js.get_axis(THROTTLE_AXIS), 2)
@@ -95,6 +102,9 @@ try:
                     is_recording = not is_recording  # Toggle recording
                 elif js.get_button(STOP_BUTTON):
                     print("E-STOP PRESSED. TERMINATE!")
+                    msg = ("END,END\n").encode('utf-8')
+                    ser_pico.write(msg)
+                        
                     raise KeyboardInterrupt
 
         # Calaculate steering and throttle value
@@ -110,6 +120,8 @@ try:
             duty_th = THROTTLE_STALL + int(THROTTLE_REV_RANGE * max(act_th, -THROTTLE_LIMIT))
         else:
             duty_th = THROTTLE_STALL 
+        duty_st = round(duty_st, 2)
+        duty_th = round(duty_th, 2)
         msg = (str(duty_st) + "," + str(duty_th) + "\n").encode('utf-8')
 
         # Send control signals to the microcontroller
@@ -117,10 +129,15 @@ try:
 
         # Save data if recording is active
         if is_recording:
-            # Save the RGB and depth images
-            cv2.imwrite(os.path.join(image_dir, f"{frame_counts}_color.jpg"), color_image)
-            cv2.imwrite(os.path.join(image_dir, f"{frame_counts}_depth.png"), depth_image)
+            # Save the RGB and depth images at a lower resolution
+            resized_color_image = cv2.resize(color_image, (320, 240)) #120, 160
+            resized_depth_image = cv2.resize(depth_colormap, (320, 240)) #120, 160
 
+            # Save the RGB and depth images
+            print(f"image dir: {image_dir}")
+            cv2.imwrite(os.path.join(image_dir, f"{frame_counts}_color.jpg"), resized_color_image)
+            print(f"depth image dir: {depth_image_dir}")
+            cv2.imwrite(os.path.join(depth_image_dir, f"{frame_counts}_depth.png"), resized_depth_image)
             # Log the joystick values
             with open(label_path, 'a+', newline='') as f:
                 writer = csv.writer(f)
