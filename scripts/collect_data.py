@@ -134,9 +134,9 @@ try:
             resized_depth_image = cv2.resize(depth_colormap, (320, 240)) #120, 160
 
             # Save the RGB and depth images
-            print(f"image dir: {image_dir}")
+            #print(f"image dir: {image_dir}") #Print direction(s) for images
             cv2.imwrite(os.path.join(image_dir, f"{frame_counts}_color.jpg"), resized_color_image)
-            print(f"depth image dir: {depth_image_dir}")
+            #print(f"depth image dir: {depth_image_dir}") #Print direction(s) for depth images 
             cv2.imwrite(os.path.join(depth_image_dir, f"{frame_counts}_depth.png"), resized_depth_image)
             # Log the joystick values
             with open(label_path, 'a+', newline='') as f:
