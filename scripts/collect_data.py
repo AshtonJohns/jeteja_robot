@@ -64,6 +64,14 @@ frame_counts = 0
 ax_val_st = 0.
 ax_val_th = 0.
 
+# Initialize frame rate tracking variables
+prev_time_rgb = time()
+prev_time_depth = time()
+frame_count_rgb = 0
+frame_count_depth = 0
+fps_rgb = 0
+fps_depth = 0
+
 # Initialize Pygame for joystick handling
 pygame.init()
 
@@ -76,6 +84,24 @@ try:
 
         if not depth_frame or not color_frame:
             continue  # Skip if frames are not ready
+
+        # Calculate RGB frame rate
+        frame_count_rgb += 1
+        current_time_rgb = time()
+        if current_time_rgb - prev_time_rgb >= 1.0:
+            fps_rgb = frame_count_rgb / (current_time_rgb - prev_time_rgb)
+            print(f"RGB Frame Rate: {fps_rgb:.2f} FPS")
+            prev_time_rgb = current_time_rgb
+            frame_count_rgb = 0
+
+        # Calculate Depth frame rate
+        frame_count_depth += 1
+        current_time_depth = time()
+        if current_time_depth - prev_time_depth >= 1.0:
+            fps_depth = frame_count_depth / (current_time_depth - prev_time_depth)
+            print(f"Depth Frame Rate: {fps_depth:.2f} FPS")
+            prev_time_depth = current_time_depth
+            frame_count_depth = 0
 
         # Convert frames to numpy arrays
         depth_image = np.asanyarray(depth_frame.get_data())
