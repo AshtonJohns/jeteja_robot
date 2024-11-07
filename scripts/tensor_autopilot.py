@@ -1,30 +1,21 @@
 import os
 import sys
 import json
-import torch
-#from models import MultiModalNet
-from hardware import get_realsense_frame, setup_realsense_camera, setup_serial, setup_joystick, encode_dutycylce, encode_throttle, encode
-from torchvision import transforms
+from hardware import get_realsense_frame, setup_realsense_camera, setup_serial, setup_joystick, encode_dutycylce, encode
 import pygame
 import cv2 as cv
-from convnets import DonkeyNet
 from time import time  # Import time module for frame rate calculation
+import tensorrt as trt
+import pycuda.driver as cuda
+import pycuda.autoinit
 
-#Adds dummy to run Pygame without a display
+# Adds dummy to run Pygame without a display
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 # Initialize only the required Pygame modules
 pygame.display.init()
 pygame.joystick.init()
 js = pygame.joystick.Joystick(0)
-
-
-# SETUP
-# Load model
-model_path = os.path.join('models', 'DonkeyNet-15epochs-0.001lr-2024-11-06-12-15.pth') #Change to name of pth file you want to use
-model = DonkeyNet()
-model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
-model.eval()
 
 # Load configs
 params_file_path = os.path.join(sys.path[0], 'config_new.json')
@@ -50,24 +41,46 @@ except:
     ser_pico = setup_serial(port='/dev/ttyACM1', baudrate=115200)
 cam = setup_realsense_camera()
 js = setup_joystick()
+is_paused = False
 
-to_tensor = transforms.ToTensor()
-is_paused = False #True to enable pause mode, False to not enable pause mode ***Only put True if you have pause button***
-frame_counts = 0
+# Load TensorRT engine
+TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+engine_path = "models/DonkeyNet.trt"  # Path to the TensorRT model
+
+with open(engine_path, "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
+    engine = runtime.deserialize_cuda_engine(f.read())
+    context = engine.create_execution_context()
+
+# Allocate buffers for TensorRT inference
+def allocate_buffers(engine):
+    inputs = []
+    outputs = []
+    bindings = []
+    stream = cuda.Stream()
+    for binding in engine:
+        size = trt.volume(engine.get_binding_shape(binding)) * engine.max_batch_size
+        dtype = trt.nptype(engine.get_binding_dtype(binding))
+        host_mem = cuda.pagelocked_empty(size, dtype)
+        device_mem = cuda.mem_alloc(host_mem.nbytes)
+        bindings.append(int(device_mem))
+        if engine.binding_is_input(binding):
+            inputs.append((host_mem, device_mem))
+        else:
+            outputs.append((host_mem, device_mem))
+    return inputs, outputs, bindings, stream
+
+inputs, outputs, bindings, stream = allocate_buffers(engine)
 
 # Frame rate calculation variables
 prev_time = time()
 frame_count = 0
 fps = 0
 
-# Initialize Pygame for joystick handling
-pygame.init()
-
 # MAIN LOOP
 try:
     while True:
-        ret, frame = get_realsense_frame(cam)
-        if not ret or frame is None:
+        ret, color_image, depth_image = get_realsense_frame(cam)
+        if not ret or color_image is None or depth_image is None:
             print("No frame received. TERMINATE!")
             break
 
@@ -75,50 +88,38 @@ try:
             if e.type == pygame.JOYBUTTONDOWN:
                 if js.get_button(params['pause_btn']):
                     is_paused = not is_paused
-                    #headlight.toggle()
                 elif js.get_button(params['stop_btn']):
                     print("E-STOP PRESSED. TERMINATE!")
                     break
 
-        # Predict steering and throttle
-        img_tensor = to_tensor(cv.resize(frame, (320,240))).unsqueeze(0)  # Add batch dimension
-        pred_st, pred_th = model(img_tensor).squeeze()
-        st_trim = float(pred_st)
-        if st_trim >= 1:  # trim steering signal
-            st_trim = .999
-        elif st_trim <= -1:
-            st_trim = -.999
-        th_trim = (float(pred_th))
-        if th_trim >= 1:  # trim throttle signal
-            th_trim = .999
-        elif th_trim <= -1:
-            th_trim = -.999
-        # Encode steering value to dutycycle in nanosecond
-        if is_paused:
-            duty_st = STEERING_CENTER
-        else:
-            duty_st = STEERING_CENTER - STEERING_RANGE + int(STEERING_RANGE * (st_trim + 1))
-        # Encode throttle value to dutycycle in nanosecond
-        if is_paused:
-            duty_th = THROTTLE_STALL
-        else:
-            if th_trim > 0:
-                duty_th = THROTTLE_STALL + int(THROTTLE_FWD_RANGE * min(th_trim, THROTTLE_LIMIT))
-            elif th_trim < 0:
-                duty_th = THROTTLE_STALL + int(THROTTLE_REV_RANGE * max(th_trim, -THROTTLE_LIMIT))
-            else:
-                duty_th = THROTTLE_STALL
+        # Resize and normalize RGB and depth images, then stack them into a 4-channel tensor
+        color_image_resized = cv.resize(color_image, (320, 240))
+        depth_image_resized = cv.resize(depth_image, (320, 240))
+        color_image_normalized = color_image_resized.astype(np.float32) / 255.0
+        depth_image_normalized = depth_image_resized.astype(np.float32) / 255.0
+        img_tensor = np.dstack((color_image_normalized, depth_image_normalized)).transpose(2, 0, 1)  # Shape (4, 320, 240)
 
-        #print(f"{pred_st},{pred_th}")
+        # Copy img_tensor to TensorRT input buffer
+        np.copyto(inputs[0][0], img_tensor.ravel())
 
-        # Encode and send commands
+        # Run inference with TensorRT
+        cuda.memcpy_htod_async(inputs[0][1], inputs[0][0], stream)
+        context.execute_async_v2(bindings=bindings, stream_handle=stream.handle)
+        cuda.memcpy_dtoh_async(outputs[0][0], outputs[0][1], stream)
+        stream.synchronize()
+
+        # Retrieve and process predictions
+        pred_st, pred_th = outputs[0][0][:2]
+        st_trim = max(min(float(pred_st), 0.999), -0.999)
+        th_trim = max(min(float(pred_th), 0.999), -0.999)
+
+        # Encode and send commands as usual
         if not is_paused:
-            msg = encode_dutycylce(pred_st,pred_th,params)
+            msg = encode_dutycylce(st_trim, th_trim, params)
         else:
             duty_st, duty_th = params['steering_center'], params['throttle_stall']
-            msg = encode(duty_st,duty_th)
-            
-        
+            msg = encode(duty_st, duty_th)
+
         ser_pico.write(msg)
 
         # Calculate and print frame rate
@@ -133,7 +134,6 @@ try:
 except KeyboardInterrupt:
     print("Terminated by user.")
 finally:
-    # cam.stop()
     pygame.joystick.quit()
     ser_pico.close()
     cv.destroyAllWindows()
