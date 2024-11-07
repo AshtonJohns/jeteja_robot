@@ -135,6 +135,8 @@ plt.plot(range(epochs), train_losses, 'b--', label='Training')
 plt.plot(range(epochs), test_losses, 'orange', label='Test')
 plt.xlabel('Epoch')
 plt.ylabel('MSE Loss')
+plt.ylim(0.1, max(max(train_losses), max(test_losses)))  # Set y-axis minimum to 0.1
+plt.grid(True)  # Enable grid
 plt.legend()
 plt.title(pilot_title)
 plt.savefig(os.path.join(data_dir, f'{pilot_title}.png'))
