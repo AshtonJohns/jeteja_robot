@@ -118,7 +118,7 @@ try:
 
         # Handle joystick input events
         for e in pygame.event.get():
-            print(e)
+            #print(e)
             if e.type == pygame.JOYAXISMOTION:
                 ax_val_st = round(js.get_axis(STEERING_AXIS), 2)
                 ax_val_th = round(js.get_axis(THROTTLE_AXIS), 2)
