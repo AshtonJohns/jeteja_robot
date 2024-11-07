@@ -22,6 +22,7 @@ try:
     sleep(3)  # ESC calibrate
     poller = select.poll()
     poller.register(sys.stdin, select.POLLIN)
+    print("I'm listening...")
     event = poller.poll()
 
     while True:
