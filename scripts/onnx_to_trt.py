@@ -4,15 +4,21 @@ import pycuda.autoinit
 import os
 
 # Path to your ONNX model
-onnx_model_path = "/path/to/your_model.onnx"  # Replace with your ONNX file path
-trt_engine_path = "your_model.trt"  # The output TensorRT engine file
+onnx_model_path = "/home/ucajetson/UCAJetson/models/DonkeyNet-15epochs-0.001lr_TensorRT.onnx"  # Replace with your ONNX file path
+trt_engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_test.trt"  # The output TensorRT engine file
 
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
 # Function to convert ONNX to TensorRT
 def build_engine(onnx_file_path, engine_file_path):
-    with trt.Builder(TRT_LOGGER) as builder, builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)) as network, trt.OnnxParser(network, TRT_LOGGER) as parser:
-        builder.max_workspace_size = 1 << 30  # 1GB workspace
+    with trt.Builder(TRT_LOGGER) as builder, \
+         builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)) as network, \
+         trt.OnnxParser(network, TRT_LOGGER) as parser:
+        
+        # Create the config object and set max_workspace_size here
+        config = builder.create_builder_config()
+        config.max_workspace_size = 1 << 30  # 1GB workspace
+
         builder.max_batch_size = 1
 
         # Parse the ONNX file
@@ -23,9 +29,9 @@ def build_engine(onnx_file_path, engine_file_path):
                     print(parser.get_error(error))
                 return None
 
-        # Build the TensorRT engine
+        # Build the TensorRT engine with the config
         print("Building TensorRT engine. This may take a few minutes...")
-        engine = builder.build_cuda_engine(network)
+        engine = builder.build_engine(network, config)
         if engine:
             with open(engine_file_path, "wb") as f:
                 f.write(engine.serialize())
