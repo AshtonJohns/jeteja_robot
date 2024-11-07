@@ -27,21 +27,32 @@ class BearCartDataset(Dataset):
     """
     Customized dataset
     """
-    def __init__(self, annotations_file, img_dir):
+    def __init__(self, annotations_file, img_dir, depth_dir):
         self.img_labels = pd.read_csv(annotations_file)
         self.img_dir = img_dir
+        self.depth_dir = depth_dir
         self.transform = v2.ToTensor()
 
     def __len__(self):
         return len(self.img_labels)
 
     def __getitem__(self, idx):
+        #Load RGB image
         img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
         image = cv.imread(img_path, cv.IMREAD_COLOR)
         image_tensor = self.transform(image)
+
+        #Load depth image
+        depth_img_path = os.path.join(self.depth_dir, self.img_labels.iloc[idx, 1])
+        depth_image = cv.imread(depth_img_path, cv.IMREAD_GRAYSCALE)
+        depth_tensor = self.transform(depth_image)
+
+        # Combine RGB and depth images into a single tensor
+        combined_tensor = torch.cat((image_tensor, depth_tensor), dim=0)
+
         steering = self.img_labels.iloc[idx, 2].astype(np.float32)
         throttle = self.img_labels.iloc[idx, 3].astype(np.float32)
-        return image_tensor.float(), steering, throttle
+        return combined_tensor.float(), steering, throttle
 
 
 def train(dataloader, model, loss_fn, optimizer):
@@ -80,7 +91,8 @@ def test(dataloader, model, loss_fn):
 data_dir = os.path.join(os.path.dirname(sys.path[0]), 'data', data_datetime)
 annotations_file = os.path.join(data_dir, 'labels.csv')  # the name of the csv file
 img_dir = os.path.join(data_dir, 'images') # the name of the folder with all the images in it
-bearcart_dataset = BearCartDataset(annotations_file, img_dir)
+depth_dir = os.path.join(data_dir, 'depth_images')
+bearcart_dataset = BearCartDataset(annotations_file, img_dir, depth_dir)
 print(f"data length: {len(bearcart_dataset)}")
 
 # Create training dataloader and test dataloader
