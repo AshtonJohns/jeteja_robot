@@ -8,6 +8,7 @@ from torchvision import transforms
 import pygame
 import cv2 as cv
 from convnets import DonkeyNet
+from time import time  # Import time module for frame rate calculation
 
 #Adds dummy to run Pygame without a display
 os.environ["SDL_VIDEODRIVER"] = "dummy"
@@ -53,6 +54,11 @@ js = setup_joystick()
 to_tensor = transforms.ToTensor()
 is_paused = False #True to enable pause mode, False to not enable pause mode ***Only put True if you have pause button***
 frame_counts = 0
+
+# Frame rate calculation variables
+prev_time = time()
+frame_count = 0
+fps = 0
 
 # Initialize Pygame for joystick handling
 pygame.init()
@@ -103,7 +109,7 @@ try:
             else:
                 duty_th = THROTTLE_STALL
 
-        print(f"{pred_st},{pred_th}")
+        #print(f"{pred_st},{pred_th}")
 
         # Encode and send commands
         if not is_paused:
@@ -114,7 +120,15 @@ try:
             
         
         ser_pico.write(msg)
-        frame_counts += 1
+
+        # Calculate and print frame rate
+        frame_count += 1
+        current_time = time()
+        if current_time - prev_time >= 1.0:
+            fps = frame_count / (current_time - prev_time)
+            print(f"Autopilot Frame Rate: {fps:.2f} FPS")
+            prev_time = current_time
+            frame_count = 0
 
 except KeyboardInterrupt:
     print("Terminated by user.")
