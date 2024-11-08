@@ -34,6 +34,7 @@ THROTTLE_REV_RANGE = params['throttle_rev_range']
 THROTTLE_LIMIT = params['throttle_limit']
 RECORD_BUTTON = params['record_btn']
 STOP_BUTTON = params['stop_btn']
+PAUSE_BUTTON = params['pause_btn']
 
 # Initialize hardware
 try:
@@ -42,11 +43,11 @@ except:
     ser_pico = setup_serial(port='/dev/ttyACM1', baudrate=115200)
 cam = setup_realsense_camera()
 js = setup_joystick()
-is_paused = False
+is_paused = True
 
 # Load TensorRT engine
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
-engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_test.trt"  # Path to the TensorRT model
+engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_test2.trt"  # Path to the TensorRT model
 
 with open(engine_path, "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
     engine = runtime.deserialize_cuda_engine(f.read())
