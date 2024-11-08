@@ -1,15 +1,15 @@
 import serial
 import pygame
-# from picamera2 import Picamera2
 import cv2 as cv
 import pyrealsense2 as rs
 import numpy as np
 
 def setup_realsense_camera():
     # Configure depth and color streams
-    pipeline = rs.pipeline() # type: ignore
-    config = rs.config() # type: ignore
-    config.enable_stream(rs.stream.color, 848, 480, rs.format.bgr8, 60) # type: ignore
+    pipeline = rs.pipeline()  # type: ignore
+    config = rs.config()  # type: ignore
+    config.enable_stream(rs.stream.color, 848, 480, rs.format.bgr8, 60)  # type: ignore
+    config.enable_stream(rs.stream.depth, 848, 480, rs.format.z16, 90)  # type: ignore
     pipeline.start(config)
     return pipeline
 
@@ -17,14 +17,15 @@ def get_realsense_frame(pipeline):
     # Wait for a coherent pair of frames: depth and color
     frames = pipeline.wait_for_frames()
     color_frame = frames.get_color_frame()
+    depth_frame = frames.get_depth_frame()
     
-    if not color_frame:
-        return False, None
+    if not color_frame or not depth_frame:
+        return False, None, None
 
-    # Convert RealSense image to NumPy array
+    # Convert RealSense images to NumPy arrays
     color_image = np.asanyarray(color_frame.get_data())
-    return True, color_image
-
+    depth_image = np.asanyarray(depth_frame.get_data())
+    return True, color_image, depth_image  # Now returning both color and depth images
 
 def setup_serial(port, baudrate=115200):
     ser = serial.Serial(port=port, baudrate=baudrate)
@@ -37,8 +38,7 @@ def setup_joystick():
     js.init()
     return js
 
-
-def encode_dutycylce(ax_val_st,ax_val_th,params):
+def encode_dutycylce(ax_val_st, ax_val_th, params):
     # Constants
     STEERING_AXIS = params['steering_joy_axis']
     STEERING_CENTER = params['steering_center']
@@ -51,25 +51,25 @@ def encode_dutycylce(ax_val_st,ax_val_th,params):
     RECORD_BUTTON = params['record_btn']
     STOP_BUTTON = params['stop_btn']
     
-    # Calaculate steering and throttle value
+    # Calculate steering and throttle value
     act_st = -ax_val_st
-    act_th = -ax_val_th # throttle action: -1: max forward, 1: max backward
+    act_th = -ax_val_th  # throttle action: -1: max forward, 1: max backward
 
-    # Encode steering value to dutycycle in nanosecond
+    # Encode steering value to duty cycle in nanoseconds
     duty_st = STEERING_CENTER - STEERING_RANGE + int(STEERING_RANGE * (act_st + 1))
-    # Encode throttle value to dutycycle in nanosecond
+    # Encode throttle value to duty cycle in nanoseconds
     if act_th > 0:
         duty_th = THROTTLE_STALL + int(THROTTLE_FWD_RANGE * min(act_th, THROTTLE_LIMIT))
     elif act_th < 0:
         duty_th = THROTTLE_STALL + int(THROTTLE_REV_RANGE * max(act_th, -THROTTLE_LIMIT))
     else:
-        duty_th = THROTTLE_STALL 
+        duty_th = THROTTLE_STALL
     duty_st = round(duty_st, 2)
     duty_th = round(duty_th, 2)
-    msg = encode(duty_st,duty_th)
+    msg = encode(duty_st, duty_th)
     return msg
 
-def encode(duty_st,duty_th):
+def encode(duty_st, duty_th):
     msg = (str(duty_st) + "," + str(duty_th) + "\n").encode('utf-8')
     return msg
 
