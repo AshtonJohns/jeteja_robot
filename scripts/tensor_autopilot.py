@@ -8,6 +8,7 @@ from time import time  # Import time module for frame rate calculation
 import tensorrt as trt
 import pycuda.driver as cuda
 import pycuda.autoinit
+import numpy as np
 
 # Adds dummy to run Pygame without a display
 os.environ["SDL_VIDEODRIVER"] = "dummy"
@@ -45,11 +46,27 @@ is_paused = False
 
 # Load TensorRT engine
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
-engine_path = "models/DonkeyNet.trt"  # Path to the TensorRT model
+engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_test.trt"  # Path to the TensorRT model
 
 with open(engine_path, "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
     engine = runtime.deserialize_cuda_engine(f.read())
     context = engine.create_execution_context()
+
+# Manual safe type mapping
+def safe_trt_nptype(trt_dtype):
+    """Manual dtype mapping to avoid deprecated np.bool and other issues."""
+    if trt_dtype == trt.bool:
+        return np.bool_
+    elif trt_dtype == trt.int8:
+        return np.int8
+    elif trt_dtype == trt.int32:
+        return np.int32
+    elif trt_dtype == trt.float16:
+        return np.float16
+    elif trt_dtype == trt.float32:
+        return np.float32
+    else:
+        raise TypeError(f"Unsupported dtype encountered: {trt_dtype}")
 
 # Allocate buffers for TensorRT inference
 def allocate_buffers(engine):
@@ -58,11 +75,13 @@ def allocate_buffers(engine):
     bindings = []
     stream = cuda.Stream()
     for binding in engine:
-        size = trt.volume(engine.get_binding_shape(binding)) * engine.max_batch_size
-        dtype = trt.nptype(engine.get_binding_dtype(binding))
+        size = trt.volume(engine.get_tensor_shape(binding))  # Use get_tensor_shape
+        dtype = safe_trt_nptype(engine.get_tensor_dtype(binding))  # Use safe_trt_nptype
+
         host_mem = cuda.pagelocked_empty(size, dtype)
         device_mem = cuda.mem_alloc(host_mem.nbytes)
         bindings.append(int(device_mem))
+
         if engine.binding_is_input(binding):
             inputs.append((host_mem, device_mem))
         else:
