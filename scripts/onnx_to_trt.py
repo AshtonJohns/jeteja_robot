@@ -4,8 +4,9 @@ import pycuda.autoinit
 import os
 
 # Path to your ONNX model
-onnx_model_path = "/home/ucajetson/UCAJetson/models/DonkeyNet-15epochs-0.001lr_TensorRT.onnx"  # Replace with your ONNX file path
-trt_engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_test.trt"  # The output TensorRT engine file
+
+onnx_model_path = "/home/ucajetson/UCAJetson/data/2024-11-07-18-21/DonkeyNet-15epochs-0.001lr.onnx"  # Replace with your ONNX file path
+trt_engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_test2.trt"  # The output TensorRT engine file
 
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
@@ -18,7 +19,6 @@ def build_engine(onnx_file_path, engine_file_path):
         # Create the config object and set max_workspace_size here
         config = builder.create_builder_config()
         config.max_workspace_size = 1 << 30  # 1GB workspace
-
         builder.max_batch_size = 1
 
         # Parse the ONNX file
