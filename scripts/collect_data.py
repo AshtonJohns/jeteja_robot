@@ -16,7 +16,8 @@ params_file_path = os.path.join(sys.path[0], 'config_new.json')
 with open(params_file_path) as params_file:
     params = json.load(params_file)
 
-
+#Adds dummy to run Pygame without a display
+# os.environ["SDL_VIDEODRIVER"] = "dummy"
 # Constants
 STEERING_AXIS = params['steering_joy_axis']
 STEERING_CENTER = params['steering_center']
@@ -35,7 +36,7 @@ try:
 except:
     ser_pico = serial.Serial(port='/dev/ttyACM0', baudrate=115200)
 
-pygame.display.init()
+#pygame.display.init()
 pygame.joystick.init()
 js = pygame.joystick.Joystick(0)
 
