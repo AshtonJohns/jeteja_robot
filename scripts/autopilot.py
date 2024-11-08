@@ -21,7 +21,7 @@ js = pygame.joystick.Joystick(0)
 
 # SETUP
 # Load model
-model_path = os.path.join('models', 'DonkeyNet-15epochs-0.001lr-2024-11-06-12-15.pth') #Change to name of pth file you want to use
+model_path = os.path.join('models', 'DonkeyNet-15epochs-0.001lr.pth') #Change to name of pth file you want to use
 model = DonkeyNet()
 model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
 model.eval()
@@ -42,6 +42,7 @@ THROTTLE_REV_RANGE = params['throttle_rev_range']
 THROTTLE_LIMIT = params['throttle_limit']
 RECORD_BUTTON = params['record_btn']
 STOP_BUTTON = params['stop_btn']
+PAUSE_BUTTON = params['pause_btn']
 
 # Initialize hardware
 try:
@@ -52,7 +53,7 @@ cam = setup_realsense_camera()
 js = setup_joystick()
 
 to_tensor = transforms.ToTensor()
-is_paused = False #True to enable pause mode, False to not enable pause mode ***Only put True if you have pause button***
+is_paused = True #True to enable pause mode, False to not enable pause mode ***Only put True if you have pause button***
 frame_counts = 0
 
 # Frame rate calculation variables
