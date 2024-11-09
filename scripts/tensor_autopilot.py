@@ -4,7 +4,7 @@ import json
 from hardware import get_realsense_frame, setup_realsense_camera, setup_serial, setup_joystick, encode_dutycylce, encode
 import pygame
 import cv2 as cv
-from time import time  # Import time module for frame rate calculation
+from time import time
 import tensorrt as trt
 import pycuda.driver as cuda
 import pycuda.autoinit
@@ -13,7 +13,7 @@ import numpy as np
 # Adds dummy to run Pygame without a display
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 
-# Initialize only the required Pygame modules
+# Initialize Pygame modules
 pygame.display.init()
 pygame.joystick.init()
 js = pygame.joystick.Joystick(0)
@@ -76,8 +76,8 @@ def allocate_buffers(engine):
     bindings = []
     stream = cuda.Stream()
     for binding in engine:
-        size = trt.volume(engine.get_tensor_shape(binding))  # Use get_tensor_shape
-        dtype = safe_trt_nptype(engine.get_tensor_dtype(binding))  # Use safe_trt_nptype
+        size = trt.volume(engine.get_tensor_shape(binding))
+        dtype = safe_trt_nptype(engine.get_tensor_dtype(binding))
 
         host_mem = cuda.pagelocked_empty(size, dtype)
         device_mem = cuda.mem_alloc(host_mem.nbytes)
@@ -99,8 +99,8 @@ fps = 0
 # MAIN LOOP
 try:
     while True:
-        ret, color_image, depth_image = get_realsense_frame(cam)
-        if not ret or color_image is None or depth_image is None:
+        ret, color_image = get_realsense_frame(cam)
+        if not ret or color_image is None:
             print("No frame received. TERMINATE!")
             break
 
@@ -112,12 +112,10 @@ try:
                     print("E-STOP PRESSED. TERMINATE!")
                     break
 
-        # Resize and normalize RGB and depth images, then stack them into a 4-channel tensor
-        color_image_resized = cv.resize(color_image, (320, 240))
-        depth_image_resized = cv.resize(depth_image, (320, 240))
+        # Resize and normalize RGB image
+        color_image_resized = cv.resize(color_image, (160, 120))
         color_image_normalized = color_image_resized.astype(np.float32) / 255.0
-        depth_image_normalized = depth_image_resized.astype(np.float32) / 255.0
-        img_tensor = np.dstack((color_image_normalized, depth_image_normalized)).transpose(2, 0, 1)  # Shape (4, 320, 240)
+        img_tensor = color_image_normalized.transpose(2, 0, 1)  # Shape (3, 120, 160)
 
         # Copy img_tensor to TensorRT input buffer
         np.copyto(inputs[0][0], img_tensor.ravel())

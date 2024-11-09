@@ -5,27 +5,25 @@ import pyrealsense2 as rs
 import numpy as np
 
 def setup_realsense_camera():
-    # Configure depth and color streams
+    # Configure color stream only for 120x160 RGB images
     pipeline = rs.pipeline()  # type: ignore
     config = rs.config()  # type: ignore
-    config.enable_stream(rs.stream.color, 848, 480, rs.format.bgr8, 60)  # type: ignore
-    config.enable_stream(rs.stream.depth, 848, 480, rs.format.z16, 90)  # type: ignore
+    config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 60)  # Using 848x480 as base resolution
     pipeline.start(config)
     return pipeline
 
 def get_realsense_frame(pipeline):
-    # Wait for a coherent pair of frames: depth and color
+    # Wait for a coherent color frame
     frames = pipeline.wait_for_frames()
     color_frame = frames.get_color_frame()
-    depth_frame = frames.get_depth_frame()
     
-    if not color_frame or not depth_frame:
-        return False, None, None
+    if not color_frame:
+        return False, None
 
-    # Convert RealSense images to NumPy arrays
+    # Convert RealSense image to NumPy array and resize to 120x160
     color_image = np.asanyarray(color_frame.get_data())
-    depth_image = np.asanyarray(depth_frame.get_data())
-    return True, color_image, depth_image  # Now returning both color and depth images
+    color_image_resized = cv.resize(color_image, (160, 120))  # Resize to 120x160
+    return True, color_image_resized
 
 def setup_serial(port, baudrate=115200):
     ser = serial.Serial(port=port, baudrate=baudrate)
