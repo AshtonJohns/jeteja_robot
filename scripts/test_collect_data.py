@@ -47,7 +47,7 @@ os.makedirs(image_dir, exist_ok=True)
 # Initialize RealSense camera pipeline for RGB only
 pipeline = rs.pipeline()
 config = rs.config()
-config.enable_stream(rs.stream.color, 424, 240 rs.format.bgr8, 30)
+config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 30)
 
 # Start streaming from the camera
 pipeline.start(config)
