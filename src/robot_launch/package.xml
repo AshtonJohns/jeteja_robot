@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>robot_launch</name>
+  <version>0.0.0</version>
+  <description>Package for launching and controlling a robot with ROS 2 and a Pico microcontroller.</description>
+  <maintainer email="ashtonmjohns@gmail.com">ajay</maintainer>
+  <license>Apache License 2.0</license>
+
+  <!-- Dependencies for ROS 2 packages and message types -->
+  <depend>ament_index_python</depend>
+  <depend>rclpy</depend>
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend> <!-- Add this if not already -->
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
+  <depend>teleop_twist_joy</depend>
+  <depend>joy</depend>
+  <depend>realsense2_camera</depend>
+  <depend>rclpy</depend>
+
+  <!-- Testing dependencies -->
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+
+  <exec_depend>teleop_twist_joy</exec_depend>
+</package>

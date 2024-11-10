@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>micro_controller_launch</name>
+  <version>0.0.0</version>
+  <description>Package to launch a MicroPython script on the Raspberry Pi Pico using mpremote.</description>
+
+  <maintainer email="ashtonmjohns@gmail.com">ajay</maintainer>
+  <license>Apache License 2.0</license>
+
+  <!-- Dependencies for ROS 2 functionality -->
+  <depend>rclpy</depend>
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
+
+  <!-- Optional dependency to note mpremote for Pico control (not managed by rosdep) -->
+  <depend>mpremote</depend>
+
+  <!-- Testing dependencies -->
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
