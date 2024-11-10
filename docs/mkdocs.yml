@@ -1,5 +1,5 @@
-site_name: BearCart Documentation
-site_url: https://UCAEngineeringPhysics.github.io/BearCart
+site_name: Robot Jeteja Documentation
+site_url: https://AshtonJohns.github.io/UCAJetson/
 nav:
   - Home: index.md
   - Getting Started: getting_started.md
