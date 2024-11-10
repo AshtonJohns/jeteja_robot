@@ -19,7 +19,7 @@ js = pygame.joystick.Joystick(0)
 
 # SETUP
 # Load model
-model_path = os.path.join('models', 'DonkeyNet-15epochs-0.001lr.pth')  # Adjust to your .pth file path
+model_path = os.path.join('models', 'DonkeyNet-15epochs-0.001lr-JetsonTest3.pth')  # Adjust to your .pth file path
 model = DonkeyNet()
 model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
 model.eval()

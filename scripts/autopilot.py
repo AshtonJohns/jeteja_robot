@@ -2,7 +2,6 @@ import os
 import sys
 import json
 import torch
-#from models import MultiModalNet
 from hardware import get_realsense_frame, setup_realsense_camera, setup_serial, setup_joystick, encode_dutycylce, encode_throttle, encode
 from torchvision import transforms
 import pygame
@@ -10,7 +9,7 @@ import cv2 as cv
 from convnets import DonkeyNet
 from time import time  # Import time module for frame rate calculation
 
-#Adds dummy to run Pygame without a display
+# Adds dummy to run Pygame without a display
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 # Initialize only the required Pygame modules
@@ -18,10 +17,9 @@ pygame.display.init()
 pygame.joystick.init()
 js = pygame.joystick.Joystick(0)
 
-
 # SETUP
 # Load model
-model_path = os.path.join('models', 'DonkeyNet-15epochs-0.001lr.pth') #Change to name of pth file you want to use
+model_path = os.path.join('models', 'DonkeyNet-15epochs-0.001lr-JetsonTest3.pth')  # Adjust to your .pth file path
 model = DonkeyNet()
 model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
 model.eval()
@@ -53,7 +51,7 @@ cam = setup_realsense_camera()
 js = setup_joystick()
 
 to_tensor = transforms.ToTensor()
-is_paused = True #True to enable pause mode, False to not enable pause mode ***Only put True if you have pause button***
+is_paused = True
 frame_counts = 0
 
 # Frame rate calculation variables
@@ -76,50 +74,25 @@ try:
             if e.type == pygame.JOYBUTTONDOWN:
                 if js.get_button(params['pause_btn']):
                     is_paused = not is_paused
-                    #headlight.toggle()
                 elif js.get_button(params['stop_btn']):
                     print("E-STOP PRESSED. TERMINATE!")
                     break
 
-        # Predict steering and throttle
-        img_tensor = to_tensor(cv.resize(frame, (320,240))).unsqueeze(0)  # Add batch dimension
+        # Process the frame for prediction
+        img_tensor = to_tensor(cv.resize(frame, (160, 120))).unsqueeze(0)  # Resize to 120x160 and add batch dimension
         pred_st, pred_th = model(img_tensor).squeeze()
-        st_trim = float(pred_st)
-        if st_trim >= 1:  # trim steering signal
-            st_trim = .999
-        elif st_trim <= -1:
-            st_trim = -.999
-        th_trim = (float(pred_th))
-        if th_trim >= 1:  # trim throttle signal
-            th_trim = .999
-        elif th_trim <= -1:
-            th_trim = -.999
-        # Encode steering value to dutycycle in nanosecond
-        if is_paused:
-            duty_st = STEERING_CENTER
-        else:
-            duty_st = STEERING_CENTER - STEERING_RANGE + int(STEERING_RANGE * (st_trim + 1))
-        # Encode throttle value to dutycycle in nanosecond
-        if is_paused:
-            duty_th = THROTTLE_STALL
-        else:
-            if th_trim > 0:
-                duty_th = THROTTLE_STALL + int(THROTTLE_FWD_RANGE * min(th_trim, THROTTLE_LIMIT))
-            elif th_trim < 0:
-                duty_th = THROTTLE_STALL + int(THROTTLE_REV_RANGE * max(th_trim, -THROTTLE_LIMIT))
-            else:
-                duty_th = THROTTLE_STALL
-
-        #print(f"{pred_st},{pred_th}")
+        
+        # Clip predictions to valid range
+        st_trim = max(min(float(pred_st), 0.999), -0.999)
+        th_trim = max(min(float(pred_th), 0.999), -0.999)
 
         # Encode and send commands
         if not is_paused:
-            msg = encode_dutycylce(pred_st,pred_th,params)
+            msg = encode_dutycylce(st_trim, th_trim, params)
         else:
             duty_st, duty_th = params['steering_center'], params['throttle_stall']
-            msg = encode(duty_st,duty_th)
-            
-        
+            msg = encode(duty_st, duty_th)
+
         ser_pico.write(msg)
 
         # Calculate and print frame rate
@@ -134,7 +107,6 @@ try:
 except KeyboardInterrupt:
     print("Terminated by user.")
 finally:
-    # cam.stop()
     pygame.joystick.quit()
     ser_pico.close()
     cv.destroyAllWindows()

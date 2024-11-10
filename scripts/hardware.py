@@ -8,7 +8,7 @@ def setup_realsense_camera():
     # Configure color stream only for 120x160 RGB images
     pipeline = rs.pipeline()  # type: ignore
     config = rs.config()  # type: ignore
-    config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 60)  # Using 848x480 as base resolution
+    config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 30)  # Using 848x480 as base resolution
     pipeline.start(config)
     return pipeline
 
