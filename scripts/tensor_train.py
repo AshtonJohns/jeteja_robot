@@ -12,7 +12,6 @@ import cv2 as cv
 import torch.onnx  # Import ONNX support from PyTorch
 
 # Pass in command line arguments for data directory name
-# e.g. python train.py 2022-02-22-22-22
 if len(sys.argv) != 2:
     print('Training script needs data!!!')
     sys.exit(1)  # exit with an error code
@@ -26,7 +25,7 @@ print(f"Using {DEVICE} device")
 
 class BearCartDataset(Dataset):
     """
-    Customized dataset
+    Customized dataset for 4-channel RGB-depth combined images
     """
     def __init__(self, annotations_file, img_dir):
         self.img_labels = pd.read_csv(annotations_file)
@@ -37,9 +36,9 @@ class BearCartDataset(Dataset):
         return len(self.img_labels)
 
     def __getitem__(self, idx):
-        # Load RGB image only
+        # Load 4-channel RGB-depth image
         img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
-        image = cv.imread(img_path, cv.IMREAD_COLOR)
+        image = cv.imread(img_path, cv.IMREAD_UNCHANGED)  # Load 4-channel image directly
         image = cv.resize(image, (160, 120))  # Ensure images are resized correctly
         image_tensor = self.transform(image)
 
@@ -84,7 +83,7 @@ def test(dataloader, model, loss_fn):
 # Create a dataset
 data_dir = os.path.join(os.path.dirname(sys.path[0]), 'data', data_datetime)
 annotations_file = os.path.join(data_dir, 'labels.csv')
-img_dir = os.path.join(data_dir, 'images')
+img_dir = os.path.join(data_dir, 'combined_images')  # Update directory to combined images
 bearcart_dataset = BearCartDataset(annotations_file, img_dir)
 print(f"data length: {len(bearcart_dataset)}")
 
@@ -122,6 +121,7 @@ plt.plot(range(epochs), test_losses, 'orange', label='Test')
 plt.xlabel('Epoch')
 plt.ylabel('MSE Loss')
 plt.ylim(0.0, 0.1)
+plt.yticks(np.arange(0, 0.11, 0.01))  # Set y-axis ticks from 0 to 0.1 in steps of 0.01
 plt.grid(True)
 plt.legend()
 plt.title(pilot_title)
@@ -132,7 +132,7 @@ torch.save(model.state_dict(), os.path.join(data_dir, f'{pilot_title}.pth'))
 print("Model weights saved")
 
 # ONNX export
-dummy_input = torch.randn(1, 3, 120, 160).to(DEVICE)  # Adjust shape for 120x160 RGB
+dummy_input = torch.randn(1, 4, 120, 160).to(DEVICE)  # Adjust shape for 120x160 RGB-depth
 onnx_model_path = os.path.join(data_dir, f'{pilot_title}.onnx')
 torch.onnx.export(model, dummy_input, onnx_model_path, opset_version=11)
 print(f"Model exported to ONNX format at: {onnx_model_path}")

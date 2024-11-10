@@ -47,7 +47,7 @@ is_paused = True
 
 # Load TensorRT engine
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
-engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_JetsonTest3.trt"  # Path to the TensorRT model
+engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_JetsonTest4.trt"  # Path to the TensorRT model
 
 with open(engine_path, "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
     engine = runtime.deserialize_cuda_engine(f.read())
@@ -99,8 +99,8 @@ fps = 0
 # MAIN LOOP
 try:
     while True:
-        ret, color_image = get_realsense_frame(cam)
-        if not ret or color_image is None:
+        ret, color_image, depth_image = get_realsense_frame(cam)  # Capture RGB and depth frames
+        if not ret or color_image is None or depth_image is None:
             print("No frame received. TERMINATE!")
             break
 
@@ -115,7 +115,15 @@ try:
         # Resize and normalize RGB image
         color_image_resized = cv.resize(color_image, (160, 120))
         color_image_normalized = color_image_resized.astype(np.float32) / 255.0
-        img_tensor = color_image_normalized.transpose(2, 0, 1)  # Shape (3, 120, 160)
+
+        # Resize, normalize, and add a channel dimension for depth image
+        depth_image_resized = cv.resize(depth_image, (160, 120))
+        depth_image_normalized = cv.normalize(depth_image_resized, None, 0, 1, cv.NORM_MINMAX).astype(np.float32)
+        depth_image_expanded = np.expand_dims(depth_image_normalized, axis=2)
+
+        # Stack RGB and depth to create a 4-channel input
+        combined_image = np.concatenate((color_image_normalized, depth_image_expanded), axis=2)
+        img_tensor = combined_image.transpose(2, 0, 1)  # Shape (4, 120, 160)
 
         # Copy img_tensor to TensorRT input buffer
         np.copyto(inputs[0][0], img_tensor.ravel())
