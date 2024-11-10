@@ -5,25 +5,32 @@ import pyrealsense2 as rs
 import numpy as np
 
 def setup_realsense_camera():
-    # Configure color stream only for 120x160 RGB images
+    # Configure both color and depth streams
     pipeline = rs.pipeline()  # type: ignore
     config = rs.config()  # type: ignore
-    config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 30)  # Using 848x480 as base resolution
+    config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 30)  # RGB stream
+    config.enable_stream(rs.stream.depth, 424, 240, rs.format.z16, 30)  # Depth stream
     pipeline.start(config)
     return pipeline
 
 def get_realsense_frame(pipeline):
-    # Wait for a coherent color frame
+    # Wait for coherent color and depth frames
     frames = pipeline.wait_for_frames()
     color_frame = frames.get_color_frame()
-    
-    if not color_frame:
-        return False, None
+    depth_frame = frames.get_depth_frame()
 
-    # Convert RealSense image to NumPy array and resize to 120x160
+    if not color_frame or not depth_frame:
+        return False, None, None
+
+    # Convert color and depth frames to NumPy arrays
     color_image = np.asanyarray(color_frame.get_data())
-    color_image_resized = cv.resize(color_image, (160, 120))  # Resize to 120x160
-    return True, color_image_resized
+    depth_image = np.asanyarray(depth_frame.get_data())
+
+    # Resize images to 120x160
+    color_image_resized = cv.resize(color_image, (160, 120))
+    depth_image_resized = cv.resize(depth_image, (160, 120))
+
+    return True, color_image_resized, depth_image_resized
 
 def setup_serial(port, baudrate=115200):
     ser = serial.Serial(port=port, baudrate=baudrate)

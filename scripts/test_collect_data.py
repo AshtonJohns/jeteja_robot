@@ -40,14 +40,15 @@ pygame.joystick.init()
 js = pygame.joystick.Joystick(0)
 
 data_dir = os.path.join('data', datetime.now().strftime("%Y-%m-%d-%H-%M"))
-image_dir = os.path.join(data_dir, 'images/')
+combined_image_dir = os.path.join(data_dir, 'combined_images/')
 label_path = os.path.join(data_dir, 'labels.csv')
-os.makedirs(image_dir, exist_ok=True)
+os.makedirs(combined_image_dir, exist_ok=True)
 
-# Initialize RealSense camera pipeline for RGB only
+# Initialize RealSense camera pipeline for RGB and Depth
 pipeline = rs.pipeline()
 config = rs.config()
 config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 30)
+config.enable_stream(rs.stream.depth, 424, 240, rs.format.z16, 30)  # Enable depth stream
 
 # Start streaming from the camera
 pipeline.start(config)
@@ -71,8 +72,9 @@ try:
         # Wait for a new set of frames from the camera
         frames = pipeline.wait_for_frames()
         color_frame = frames.get_color_frame()
+        depth_frame = frames.get_depth_frame()  # Get depth frame
 
-        if not color_frame:
+        if not color_frame or not depth_frame:
             continue  # Skip if frames are not ready
 
         # Calculate RGB frame rate
@@ -88,8 +90,17 @@ try:
         color_image = np.asanyarray(color_frame.get_data())
         resized_color_image = cv2.resize(color_image, (160, 120))
 
-        # Display the resized RGB image
-        cv2.imshow('RealSense Stream - RGB Only', resized_color_image)
+        # Convert depth frame to numpy array, normalize, and resize to 120x160 grayscale
+        depth_image = np.asanyarray(depth_frame.get_data())
+        depth_image_normalized = cv2.normalize(depth_image, None, 0, 255, cv2.NORM_MINMAX)
+        resized_depth_image = cv2.resize(depth_image_normalized, (160, 120)).astype(np.uint8)
+
+        # Stack RGB and Depth into a single 4-channel image
+        depth_image_expanded = np.expand_dims(resized_depth_image, axis=2)  # Add channel dimension for depth
+        combined_image = np.concatenate((resized_color_image, depth_image_expanded), axis=2)  # 4-channel combined image
+
+        # Display the combined image (RGB and Depth)
+        cv2.imshow('RealSense Stream - Combined', combined_image)
 
         # Handle joystick input events
         for e in pygame.event.get():
@@ -124,11 +135,13 @@ try:
 
         # Save data if recording is active
         if is_recording:
-            # Save the RGB image and log joystick values
-            cv2.imwrite(os.path.join(image_dir, f"{frame_counts}_color.jpg"), resized_color_image)
+            # Save the combined RGB and depth image
+            cv2.imwrite(os.path.join(combined_image_dir, f"{frame_counts}_combined.png"), combined_image)
+
+            # Log joystick values with image name
             with open(label_path, 'a+', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow([f"{frame_counts}_color.jpg", ax_val_st, ax_val_th])
+                writer.writerow([f"{frame_counts}_combined.png", ax_val_st, ax_val_th])
 
             frame_counts += 1  # Increment frame counter
 
