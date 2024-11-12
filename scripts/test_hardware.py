@@ -8,8 +8,8 @@ def setup_realsense_camera():
     # Configure both color and depth streams
     pipeline = rs.pipeline()  # type: ignore
     config = rs.config()  # type: ignore
-    config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 30)  # RGB stream
-    config.enable_stream(rs.stream.depth, 424, 240, rs.format.z16, 30)  # Depth stream
+    config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 60)  # RGB stream
+    config.enable_stream(rs.stream.depth, 424, 240, rs.format.z16, 60)  # Depth stream
     pipeline.start(config)
     return pipeline
 
