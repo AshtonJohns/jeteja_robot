@@ -47,7 +47,7 @@ is_paused = True
 
 # Load TensorRT engine
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
-engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_JetsonTest3.trt"  # Path to the TensorRT model
+engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_JetsonTest4.trt"  # Path to the TensorRT model
 
 with open(engine_path, "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
     engine = runtime.deserialize_cuda_engine(f.read())
