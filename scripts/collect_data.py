@@ -1,4 +1,4 @@
-# ROS2 RealSense and RP LiDAR Integration
+#Data collection with Realsense Camera
 
 import os
 import sys
