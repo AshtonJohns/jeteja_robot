@@ -1,19 +1,19 @@
-# ROS2 RealSense and RP LiDAR Integration
+# ROS2 RealSense and Joystick Data Collection
 
 import os
 import sys
 import json
 import csv
-from time import time
+from time import time, sleep
 from datetime import datetime
 import pygame
-import pyrealsense2 as rs  # Import the RealSense library
+import pyrealsense2 as rs
 import numpy as np
 import cv2
 import serial
 
 # Load configs
-params_file_path = os.path.join(sys.path[0], 'config_new.json')
+params_file_path = os.path.join(sys.path[0], 'test_config.json')
 with open(params_file_path) as params_file:
     params = json.load(params_file)
 
@@ -26,6 +26,7 @@ THROTTLE_STALL = params['throttle_stall']
 THROTTLE_FWD_RANGE = params['throttle_fwd_range']
 THROTTLE_REV_RANGE = params['throttle_rev_range']
 THROTTLE_LIMIT = params['throttle_limit']
+THROTTLE_MIN = params['throttle_min']
 RECORD_BUTTON = params['record_btn']
 STOP_BUTTON = params['stop_btn']
 
@@ -59,50 +60,40 @@ frame_counts = 0
 ax_val_st = 0.
 ax_val_th = 0.
 
-# Initialize frame rate tracking for RGB
-prev_time_rgb = time()
-frame_count_rgb = 0
-fps_rgb = 0
-
 # Initialize Pygame for joystick handling
 pygame.init()
 
+# Frame rate limiter
+FRAME_RATE = 30
+last_time = time()
+
 try:
     while True:
-        # Wait for a new set of frames from the camera
+        # Frame rate control
+        current_time = time()
+        if current_time - last_time < 1.0 / FRAME_RATE:
+            continue
+        last_time = current_time
+
+        # Capture RGB and Depth frames from RealSense
         frames = pipeline.wait_for_frames()
         color_frame = frames.get_color_frame()
-        depth_frame = frames.get_depth_frame()  # Get depth frame
-
+        depth_frame = frames.get_depth_frame()
         if not color_frame or not depth_frame:
             continue  # Skip if frames are not ready
 
-        # Calculate RGB frame rate
-        frame_count_rgb += 1
-        current_time_rgb = time()
-        if current_time_rgb - prev_time_rgb >= 1.0:
-            fps_rgb = frame_count_rgb / (current_time_rgb - prev_time_rgb)
-            print(f"RGB Frame Rate: {fps_rgb:.2f} FPS")
-            prev_time_rgb = current_time_rgb
-            frame_count_rgb = 0
-
-        # Convert color frame to numpy array and resize to 120x160
+        # Convert RGB and depth to numpy arrays and resize to 120x160
         color_image = np.asanyarray(color_frame.get_data())
         resized_color_image = cv2.resize(color_image, (160, 120))
-
-        # Convert depth frame to numpy array, normalize, and resize to 120x160 grayscale
+        
         depth_image = np.asanyarray(depth_frame.get_data())
         depth_image_normalized = cv2.normalize(depth_image, None, 0, 255, cv2.NORM_MINMAX)
         resized_depth_image = cv2.resize(depth_image_normalized, (160, 120)).astype(np.uint8)
 
-        # Stack RGB and Depth into a single 4-channel image
-        depth_image_expanded = np.expand_dims(resized_depth_image, axis=2)  # Add channel dimension for depth
-        combined_image = np.concatenate((resized_color_image, depth_image_expanded), axis=2)  # 4-channel combined image
+        # Display the combined image
+        cv2.imshow('Combined Stream - RGB and Depth', resized_color_image)
 
-        # Display the combined image (RGB and Depth)
-        cv2.imshow('RealSense Stream - Combined', combined_image)
-
-        # Handle joystick input events
+        # Handle joystick inputs
         for e in pygame.event.get():
             if e.type == pygame.JOYAXISMOTION:
                 ax_val_st = round(js.get_axis(STEERING_AXIS), 2)
@@ -119,15 +110,18 @@ try:
 
         # Calculate steering and throttle values
         act_st = -ax_val_st
-        act_th = -ax_val_th  # throttle action: -1: max forward, 1: max backward
-
-        # Encode steering and throttle values to duty cycle
+        act_th = -ax_val_th
         duty_st = STEERING_CENTER - STEERING_RANGE + int(STEERING_RANGE * (act_st + 1))
+        
+        # Refined throttle control with correct forward and reverse mapping
         if act_th > 0:
-            duty_th = THROTTLE_STALL + int(THROTTLE_FWD_RANGE * min(act_th, THROTTLE_LIMIT))
+            # Forward motion with variable speed control
+            duty_th = THROTTLE_STALL + int((THROTTLE_FWD_RANGE - THROTTLE_STALL) * act_th)
         elif act_th < 0:
-            duty_th = THROTTLE_STALL + int(THROTTLE_REV_RANGE * max(act_th, -THROTTLE_LIMIT))
+            # Reverse motion with variable speed control
+            duty_th = THROTTLE_STALL - int((THROTTLE_STALL - THROTTLE_REV_RANGE) * abs(act_th))
         else:
+            # No throttle
             duty_th = THROTTLE_STALL
 
         # Send control signals to the microcontroller
@@ -135,8 +129,8 @@ try:
 
         # Save data if recording is active
         if is_recording:
-            # Save the combined RGB and depth image
-            cv2.imwrite(os.path.join(combined_image_dir, f"{frame_counts}_combined.png"), combined_image)
+            # Save the combined image with RGB and depth
+            cv2.imwrite(os.path.join(combined_image_dir, f"{frame_counts}_combined.png"), resized_color_image)
 
             # Log joystick values with image name
             with open(label_path, 'a+', newline='') as f:
