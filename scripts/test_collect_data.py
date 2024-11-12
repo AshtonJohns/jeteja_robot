@@ -63,18 +63,8 @@ ax_val_th = 0.
 # Initialize Pygame for joystick handling
 pygame.init()
 
-# Frame rate limiter
-FRAME_RATE = 30
-last_time = time()
-
 try:
     while True:
-        # Frame rate control
-        current_time = time()
-        if current_time - last_time < 1.0 / FRAME_RATE:
-            continue
-        last_time = current_time
-
         # Capture RGB and Depth frames from RealSense
         frames = pipeline.wait_for_frames()
         color_frame = frames.get_color_frame()
