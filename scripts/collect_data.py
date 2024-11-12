@@ -13,7 +13,7 @@ import cv2
 import serial
 
 # Load configs
-params_file_path = os.path.join(sys.path[0], 'config_new.json')
+params_file_path = os.path.join(sys.path[0], 'config.json')
 with open(params_file_path) as params_file:
     params = json.load(params_file)
 
