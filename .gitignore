@@ -172,6 +172,8 @@ cython_debug/
 
 # Data directory
 *models/
+data/rosbags/*
+data/rosbags_extracted/*
 
 # Database files
 *.db3
