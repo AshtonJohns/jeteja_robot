@@ -1,4 +1,5 @@
 import os
+import glob
 import cv2
 import csv
 import argparse
@@ -9,6 +10,19 @@ from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge
 from rosbag2_py import SequentialReader, StorageOptions, ConverterOptions
 from rosidl_runtime_py.utilities import get_message
+
+def find_latest_file(directory):
+    # Use glob to find all files in the directory
+    files = glob.glob(os.path.join(directory, "*"))
+    
+    # Filter to only files (exclude directories) and check if list is non-empty
+    files = [f for f in files if os.path.isfile(f)]
+    if not files:
+        return None  # Return None if no files found
+
+    # Find the file with the latest modification time
+    latest_file = max(files, key=os.path.getmtime)
+    return latest_file
 
 def extract_rosbag(bag_path, output_dir):
     os.makedirs(output_dir, exist_ok=True)
@@ -49,10 +63,12 @@ def extract_rosbag(bag_path, output_dir):
 
     csv_file.close()
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="Extract data from a rosbag.")
     parser.add_argument('bag_path', type=str, help="Path to the input rosbag file")
     parser.add_argument('output_dir', type=str, help="Directory where extracted data will be saved")
+
+    latest_rosbag = find_latest_file(directory='~/data/rosbags')    
 
     args = parser.parse_args()
     extract_rosbag(args.bag_path, args.output_dir)
