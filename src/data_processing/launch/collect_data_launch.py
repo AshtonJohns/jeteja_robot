@@ -7,12 +7,12 @@ def generate_launch_description():
         # Arguments to configure topics and output directory
         DeclareLaunchArgument(
             'topics',
-            default_value='/camera/color/image_raw /cmd_vel',
+            default_value='/camera/color/image_raw/cmd_vel',
             description='Space-separated list of topics to record'
         ),
         DeclareLaunchArgument(
             'output_dir',
-            default_value='~/rosbags',
+            default_value='~/jeteja_robot/data/rosbags',
             description='Directory where the rosbag will be saved'
         ),
         
