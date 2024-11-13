@@ -1,0 +1,9 @@
+{
+  "packages": {
+    ".git": {
+      "build": {
+        "skip": true
+      }
+    }
+  }
+}
