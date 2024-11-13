@@ -173,6 +173,9 @@ cython_debug/
 # Data directory
 *models/
 
+# Database files
+*.db3
+
 # VSCode
 *.micropico
 *.vscode/
