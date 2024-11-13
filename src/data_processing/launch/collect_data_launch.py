@@ -1,3 +1,4 @@
+from datetime import datetime
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess
 from launch.substitutions import LaunchConfiguration
@@ -12,7 +13,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'output_dir',
-            default_value='~/jeteja_robot/data/rosbags',
+            default_value=f"data/rosbags/{datetime.now()}",
             description='Directory where the rosbag will be saved'
         ),
         
