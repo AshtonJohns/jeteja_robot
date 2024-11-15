@@ -16,6 +16,7 @@ setup(
         # ('share/' + package_name + '/scripts', ['scripts/reset.py']),
         ('share/' + package_name + '/config', ['config/teleop_twist_joy.yaml']),
         ('share/' + package_name + '/config', ['config/realsense2_camera.yaml']),
+        ('share/' + package_name + '/config', ['config/remote_control_handler.yaml']),
     ],
     install_requires=['setuptools', 'pyserial'],
     zip_safe=True,
