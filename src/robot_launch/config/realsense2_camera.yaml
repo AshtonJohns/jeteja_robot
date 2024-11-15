@@ -1,0 +1,10 @@
+enable_color: true
+rgb_camera.profile: 1280x720x15
+enable_depth: true
+align_depth.enable: true
+enable_sync: true
+publish_tf: true
+tf_publish_rate: 1.0
+color_width: 640
+color_height: 480
+color_fps: 30
