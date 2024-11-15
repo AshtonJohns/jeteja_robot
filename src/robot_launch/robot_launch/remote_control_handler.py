@@ -7,124 +7,191 @@ import subprocess
 from ament_index_python.packages import get_package_share_directory
 import os
 
+class PicoHandler(object):
+    def __init__(self):
+        pass
+
+    def kill(self):
+        try:
+            self.terminate()
+        except:
+            pass
+
+    def reset(self):
+        self.kill()
+        command = ["python", "-m", "mpremote", "reset"]
+        try:
+            res = subprocess.Popen(command)
+            return 1
+        except:
+            return 0
+            
+    def run(self,path):
+        command = ["python", "-m", "mpremote", "run", path]
+        try:
+            res = subprocess.Popen(command)
+            self.terminate = res.terminate
+            return 1
+        except:
+            return 0
+        
+    def get_pico_port(self):
+        # Run `mpremote connect list` and capture the output
+        result = subprocess.run(['python3', '-m', 'mpremote', 'connect', 'list'], capture_output=True, text=True)
+        output = result.stdout
+
+        # Parse the output to find the serial port (assuming the first line has the required port)
+        lines = output.splitlines()
+        for line in lines:
+            if line.startswith('/dev'):
+                return line.split()[0]  # Extract the port (e.g., /dev/ttyACM0)
+        return 0
+
 class RemoteControlHandler(Node):
     def __init__(self):
         super().__init__('remote_control_handler')
 
+        # Pico process execution
+        self.pico_execute = PicoHandler()
+
         # Retrieve or auto-detect serial port
         self.declare_parameter('serial_port', 'auto')
-        serial_port = self.get_serial_port()
+        self.set_serial()
 
-        # Set up serial connection to Pico
-        try:
-            self.serial = serial.Serial(serial_port, baudrate=115200, timeout=1)
-            self.get_logger().info(f"Connected to Pico on {serial_port}")
-        except serial.SerialException as e:
-            self.get_logger().error(f"Failed to connect to Pico on {serial_port}: {e}")
-            rclpy.shutdown()
-            return
+        # Get main.py path for pico 
+        self.pico_port_script_path = os.path.join(
+                get_package_share_directory('robot_launch'),
+                'scripts',
+                'main.py'
+            )
+        
+        # Declare all parameters with default value 0
+        self.declare_parameter('motor_min_duty_cycle', 0)
+        self.declare_parameter('motor_neutral_duty_cycle', 0)
+        self.declare_parameter('motor_max_duty_cycle', 0)
 
-        # PWM parameters
-        self.declare_parameter('max_speed_pwm', 2000)
-        self.declare_parameter('min_speed_pwm', 1000)
-        self.declare_parameter('neutral_pwm', 1500)
-        self.max_speed_pwm = self.get_parameter('max_speed_pwm').get_parameter_value().integer_value
-        self.min_speed_pwm = self.get_parameter('min_speed_pwm').get_parameter_value().integer_value
-        self.neutral_pwm = self.get_parameter('neutral_pwm').get_parameter_value().integer_value
+        self.declare_parameter('steering_min_duty_cycle', 0)
+        self.declare_parameter('steering_neutral_duty_cycle', 0)
+        self.declare_parameter('steering_max_duty_cycle', 0)
 
-        # State variables
-        self.emergency_stop = False
+        # Motor PWM duty cycle parameters
+        self.motor_min_duty_cycle = self.get_parameter('motor_min_duty_cycle').get_parameter_value().integer_value
+        self.motor_neutral_duty_cycle = self.get_parameter('motor_neutral_duty_cycle').get_parameter_value().integer_value
+        self.motor_max_duty_cycle = self.get_parameter('motor_max_duty_cycle').get_parameter_value().integer_value
+
+        # Steering PWM duty cycle parameters
+        self.steering_min_duty_cycle = self.get_parameter('steering_min_duty_cycle').get_parameter_value().integer_value
+        self.steering_neutral_duty_cycle = self.get_parameter('steering_neutral_duty_cycle').get_parameter_value().integer_value
+        self.steering_max_duty_cycle = self.get_parameter('steering_max_duty_cycle').get_parameter_value().integer_value
+
+        # State variables (True == alive, False == dead)
+        self.microcontroller_state = False
 
         # Subscribe to /cmd_vel and /joy
         self.cmd_vel_subscription = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
         self.joy_subscription = self.create_subscription(Joy, '/joy', self.joy_callback, 10)
 
+    def set_serial(self):
+        try:
+            self.close_serial()
+            serial_port = self.get_serial_port()
+            self.serial = serial.Serial(serial_port, baudrate=115200, timeout=1)
+            self.get_logger().info(f"Connected to Pico on {serial_port}")
+            return 1
+        except serial.SerialException as e:
+            self.get_logger().error(f"Failed to connect to Pico on {serial_port}: {e}")
+            return 0
+        
+    def close_serial(self):
+        try:
+            self.serial.close()
+            return 1
+        except:
+            return 0
+
     def get_serial_port(self):
         serial_port = self.get_parameter('serial_port').get_parameter_value().string_value
         if serial_port == 'auto':
-            # Get the path to find_pico_port.py
-            pico_port_script_path = os.path.join(
-                get_package_share_directory('robot_launch'),
-                'scripts',
-                'find_pico_port.py'
-            )
-            # Run find_pico_port.py and capture output
-            try:
-                result = subprocess.run(
-                    ['python3', pico_port_script_path],
-                    capture_output=True,
-                    text=True
-                )
-                output = result.stdout.strip()
-                if output:
-                    return output
-                else:
-                    self.get_logger().error("Failed to detect Pico port.")
-                    return "/dev/ttyUSB0"  # Fallback
-            except Exception as e:
-                self.get_logger().error(f"Error detecting Pico port: {e}")
-                return "/dev/ttyUSB0"  # Fallback
+            return self.pico_execute.get_pico_port()
         return serial_port
 
     def cmd_vel_callback(self, msg):
-        if not self.emergency_stop:
+        if self.microcontroller_state:
             linear_x = msg.linear.x
             angular_z = msg.angular.z
 
-            # Convert to PWM
-            speed_pwm = self.convert_speed_to_pwm(linear_x)
-            steering_pwm = self.convert_steering_to_pwm(angular_z)
+            # Convert to PWM duty cycle
+            speed_duty_cycle = self.calculate_motor_duty_cycle(linear_x)
+            steering_duty_cycle = self.calculate_steering_duty_cycle(angular_z)
 
             # Send to Pico
-            self.send_pwm_to_pico(speed_pwm, steering_pwm)
+            self.send_duty_cycle_to_pico(speed_duty_cycle, steering_duty_cycle)
         else:
-            # If emergency stop is active, send neutral PWM values
-            self.send_pwm_to_pico(self.neutral_pwm, self.neutral_pwm)
+            # If emergency stop is active, send neutral duty cycle values
+            self.send_duty_cycle_to_pico(self.motor_neutral_duty_cycle, self.steering_neutral_duty_cycle)
 
     def joy_callback(self, joy_msg):
-        # Assume button index 0 is the emergency stop button
-        # Button index 1 could be a pause/resume command
-        emergency_button = joy_msg.buttons[0]  # Example button for emergency stop
-        pause_button = joy_msg.buttons[1]      # Example button for pause/resume recording
+        emergency_button = joy_msg.buttons[0]
+        pause_button = joy_msg.buttons[1]
+        pico_start_button = joy_msg.buttons[9]
 
-        # Emergency stop toggling
-        if emergency_button == 1:  # Emergency stop button pressed
-            self.emergency_stop = True
-            self.get_logger().info("Emergency stop activated. Robot stopped.")
-            self.send_pwm_to_pico(self.neutral_pwm, self.neutral_pwm)
+        if emergency_button == 1:
+            self.get_logger().info("Emergency buttoned pressed")
+            res = self.pico_execute.reset()
+            self.close_serial()
+            if res == 1:
+                self.microcontroller_state = False
         
-        elif pause_button == 1:  # Pause recording command (or other action)
+        elif pause_button == 1:
             self.handle_pause_resume()
 
+        elif pico_start_button == 1:
+            self.get_logger().info("Pico start button pressed")
+            if not self.microcontroller_state:
+                res = self.pico_execute.run(self.pico_port_script_path)
+                if res == 1:
+                    res = self.set_serial()
+                    if res == 1:
+                        self.microcontroller_state = True
+
     def handle_pause_resume(self):
-        # Logic for pausing/resuming (e.g., triggering a topic or service call)
-        # This could publish a message to a topic or call a service to control rosbag recording
         self.get_logger().info("Pause/Resume command received.")
-        # Implement pause/resume functionality here if needed
 
-    def convert_speed_to_pwm(self, linear_x):
-        if linear_x > 0:
-            return int(self.neutral_pwm + (linear_x * (self.max_speed_pwm - self.neutral_pwm)))
-        elif linear_x < 0:
-            return int(self.neutral_pwm + (linear_x * (self.neutral_pwm - self.min_speed_pwm)))
+    def calculate_motor_duty_cycle(self, value):
+        if value > 0:
+            return int(self.motor_neutral_duty_cycle + (value * (self.motor_max_duty_cycle - self.motor_neutral_duty_cycle)))
+        elif value < 0:
+            return int(self.motor_neutral_duty_cycle + (value * (self.motor_neutral_duty_cycle - self.motor_min_duty_cycle)))
         else:
-            return self.neutral_pwm
+            return self.motor_neutral_duty_cycle
 
-    def convert_steering_to_pwm(self, angular_z):
-        return int(self.neutral_pwm + (angular_z * (self.max_speed_pwm - self.neutral_pwm)))
+    def calculate_steering_duty_cycle(self, value):
+        if value > 0:
+            return int(self.steering_neutral_duty_cycle + (value * (self.steering_max_duty_cycle - self.steering_neutral_duty_cycle)))
+        elif value < 0:
+            return int(self.steering_neutral_duty_cycle + (value * (self.steering_neutral_duty_cycle - self.steering_min_duty_cycle)))
+        else:
+            return self.steering_neutral_duty_cycle
 
-    def send_pwm_to_pico(self, speed_pwm, steering_pwm):
-        command = f"SPEED:{speed_pwm};STEER:{steering_pwm}\n"
-        self.serial.write(command.encode('utf-8'))
+    def send_duty_cycle_to_pico(self, speed_duty_cycle, steering_duty_cycle):
+        command = f"SPEED:{speed_duty_cycle};STEER:{steering_duty_cycle}\n"
+        if self.microcontroller_state:
+            self.serial.write(command.encode('utf-8'))
+            self.get_logger().info(f"Sent: {command}")
+        else:
+            self.get_logger().info(f"Pico is not alive!")
 
 def main(args=None):
+    import traceback
     rclpy.init(args=args)
+    node = None
     try:
         node = RemoteControlHandler()
         rclpy.spin(node)
     except Exception as e:
         print(f"An error occurred: {e}")
+        traceback.print_exc()
     finally:
-        if node:
+        if node is not None:
             node.destroy_node()
         rclpy.shutdown()
