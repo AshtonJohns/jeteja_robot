@@ -6,7 +6,7 @@ teleop_twist_joy_node:
     axis_linear:
       x: 1  # Left stick Y-axis (adjust based on your joystick mapping)
     scale_linear:
-      x: 0.7
+      x: 0.2
     scale_linear_turbo:
       x: 1.5
 
@@ -14,10 +14,10 @@ teleop_twist_joy_node:
     axis_angular:
       yaw: 3  # Right stick X-axis (adjust based on your joystick mapping)
     scale_angular:
-      yaw: 0.4
+      yaw: 0.6
     scale_angular_turbo:
       yaw: 0.8
 
     # Button configuration
-    enable_button: 5           # Enable/disable teleop control (e.g., trigger button)
-    enable_turbo_button: 2      # Turbo mode button (optional, e.g., button 2)
+    enable_button: 3           # Enable/disable teleop control (e.g., trigger button)
+    enable_turbo_button: 5      # Turbo mode button (optional, e.g., button 2)
