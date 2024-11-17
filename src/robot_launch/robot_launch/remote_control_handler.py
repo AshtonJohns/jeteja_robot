@@ -1,11 +1,12 @@
+import serial
+import subprocess
+import os
 import rclpy
+from std_msgs.msg import String
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Joy
-import serial
-import subprocess
 from ament_index_python.packages import get_package_share_directory
-import os
 
 class PicoHandler(object):
     def __init__(self):
@@ -86,10 +87,13 @@ class RemoteControlHandler(Node):
 
         # State variables (True == alive, False == dead)
         self.microcontroller_state = False
+        self.recording_state = True
 
         # Subscribe to /cmd_vel and /joy
         self.cmd_vel_subscription = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
         self.joy_subscription = self.create_subscription(Joy, '/joy', self.joy_callback, 10)
+        self.subscription = self.create_subscription(Joy, '/joy', self.joy_callback, 10)
+        self.recording_status_pub = self.create_publisher(String, '/recording_status', 10)
 
     def set_serial(self):
         try:
@@ -155,7 +159,13 @@ class RemoteControlHandler(Node):
                         self.microcontroller_state = True
 
     def handle_pause_resume(self):
-        self.get_logger().info("Pause/Resume command received.")
+        if self.recording_state:
+            self.get_logger().info("Pause data collection.")
+            self.recording_status_pub.publish(String(data='pause'))
+        else:
+            self.get_logger().info("Resume data collection.")
+            self.recording_status_pub.publish(String(data='resume'))
+        self.recording_state = not self.recording_state
 
     def calculate_motor_duty_cycle(self, value):
         if value > 0:
