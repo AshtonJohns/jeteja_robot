@@ -41,6 +41,12 @@ def generate_launch_description():
     )
 
 
+    rplidar_launch_path = join(
+        get_package_share_directory('rplidar_ros'),
+        'launch',
+        'rplidar_s2_launch.py'
+    )
+
     # # Define primary nodes that, if they exit, should trigger Pico process shutdown
     # realsense_camera_node = Node(
     #     package='realsense2_camera',
@@ -58,16 +64,30 @@ def generate_launch_description():
         parameters=[remote_control_handler_config]
     )
 
-    # Include the teleop_twist_joy launch file
-    teleop_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(teleop_twist_joy_launch_path),
-        launch_arguments={'config_filepath': LaunchConfiguration('config_filepath')}.items()
+    declare_teleop_config_arg = DeclareLaunchArgument(
+        'teleop_config_filepath',
+        default_value=teleop_config,
+        description='Path to the teleop_twist_joy configuration file'
     )
 
-    # Include the realsense2_camera launch file
+    teleop_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(teleop_twist_joy_launch_path),
+        launch_arguments={'config_filepath': LaunchConfiguration('teleop_config_filepath')}.items()
+    )
+
+    declare_realsense_config_arg = DeclareLaunchArgument(
+        'realsense_config_filepath',
+        default_value=realsense2_config,
+        description='Path to the realsense2_camera configuration file'
+    )
+
     rs_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(realsense2_camera_launch_path),
-        # launch_arguments={'config_filepath': LaunchConfiguration('config_filepath')}.items()
+        launch_arguments={'config_file': LaunchConfiguration('realsense_config_filepath')}.items()
+    )
+
+    rplidar_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(rplidar_launch_path),
     )
 
     # Instructional message to display the control mappings
@@ -81,28 +101,19 @@ def generate_launch_description():
     - △ : Turbo mode (hold button)
     """
 
-    # # Teleop Node to publish to /cmd_vel
-    # teleop_node = Node(
-    #     package='teleop_twist_joy',  # Use 'teleop_twist_joy' if using a joystick
-    #     executable='teleop_node',  # Executable name
-    #     name='teleop_node',
-    #     output='screen',
-    #     parameters=[teleop_config],
-    #     remappings=[('/cmd_vel', '/cmd_vel')]
-    # )
-
     return LaunchDescription([
-        # DeclareLaunchArgument('config_filepath', default_value=realsense2_config,
-        #                        description='Path to the realsense2_camera configuration file'),
+        
+        declare_teleop_config_arg,
 
-        DeclareLaunchArgument('config_filepath', default_value=teleop_config, 
-                              description='Path to the teleop_twist_joy configuration file'),
+        declare_realsense_config_arg,
 
         remote_control_handler_node,
 
         teleop_launch,
 
-        rs_launch,
+        # rs_launch,
+
+        rplidar_launch,
 
         LogInfo(msg=controls_info),
 
