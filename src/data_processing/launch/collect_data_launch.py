@@ -15,11 +15,10 @@ def generate_launch_description():
         'topics.yaml'
     )
 
-    # Get the package directory
-    package_dir = get_package_share_directory('data_processing')
-
-    # Get the workspace directory (two levels up from the package share directory)
-    workspace_dir = os.path.abspath(os.path.join(package_dir, '..', '..'))
+    # Get the workspace directory from an environment variable or default to the install space
+    workspace_dir = os.getenv('ROS_WORKSPACE', os.path.abspath(os.path.join(
+        get_package_share_directory('data_processing'), '..', '..', '..', '..', # TODO is this a good practice? 
+    )))
 
     # Define the output directory
     default_output_dir = os.path.join(workspace_dir, 'data', 'rosbags', datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))

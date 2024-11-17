@@ -93,12 +93,14 @@ def generate_launch_description():
     # Instructional message to display the control mappings
     controls_info = """
     --- Robot Controls ---
-    - X Button: Stop
-    - O Button: Pause
-    - Right Stick: Forward/Backward
-    - Left Stick: Left/Right
-    - R1 : Enable bot moving (hold button)
-    - △ : Turbo mode (hold button)
+    - OPTIONS: Start Pico
+    - X: Reset Pico
+    - □ : Enable bot moving        (hold button)
+    - △ : Turbo mode               (hold button)
+    - ○: Pause Recording
+    - SHARE: Start Recording
+    - Left Stick: Forward/Backward (requires enable)
+    - Right Stick: Left/Right      (requires enable)
     """
 
     return LaunchDescription([

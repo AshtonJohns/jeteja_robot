@@ -1,4 +1,5 @@
 import serial
+from time import time
 import subprocess
 import os
 import rclpy
@@ -87,7 +88,8 @@ class RemoteControlHandler(Node):
 
         # State variables (True == alive, False == dead)
         self.microcontroller_state = False
-        self.recording_state = True
+        self.recording_state = False
+        self.enable_recording_state = False
 
         # Subscribe to /cmd_vel and /joy
         self.cmd_vel_subscription = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
@@ -136,8 +138,9 @@ class RemoteControlHandler(Node):
 
     def joy_callback(self, joy_msg):
         emergency_button = joy_msg.buttons[0]
-        pause_button = joy_msg.buttons[1]
+        pause_recording = joy_msg.buttons[1]
         pico_start_button = joy_msg.buttons[9]
+        start_recording = joy_msg.buttons[8]
 
         if emergency_button == 1:
             self.get_logger().info("Emergency buttoned pressed")
@@ -146,8 +149,11 @@ class RemoteControlHandler(Node):
             if res == 1:
                 self.microcontroller_state = False
         
-        elif pause_button == 1:
-            self.handle_pause_resume()
+        elif pause_recording == 1:
+            self.handle_pause()
+
+        elif start_recording == 1:
+            self.handle_resume()
 
         elif pico_start_button == 1:
             self.get_logger().info("Pico start button pressed")
@@ -158,14 +164,32 @@ class RemoteControlHandler(Node):
                     if res == 1:
                         self.microcontroller_state = True
 
-    def handle_pause_resume(self):
-        if self.recording_state:
-            self.get_logger().info("Pause data collection.")
-            self.recording_status_pub.publish(String(data='pause'))
-        else:
+    def handle_resume(self):
+        if not self.enable_recording_state and not self.recording_state:
             self.get_logger().info("Resume data collection.")
             self.recording_status_pub.publish(String(data='resume'))
-        self.recording_state = not self.recording_state
+            self.recording_state = True
+            self.start_lockout_timer()
+
+    def handle_pause(self):
+        if not self.enable_recording_state and self.recording_state:
+            self.get_logger().info("Pause data collection.")
+            self.recording_status_pub.publish(String(data='pause'))
+            self.recording_state = False
+            self.start_lockout_timer()
+
+    def start_lockout_timer(self):
+        """Start a lockout timer to prevent further actions for 10 seconds."""
+        self.enable_recording_state = True
+        self.get_logger().info("Lockout enabled for 10 seconds.")
+
+        # Create a timer
+        self.create_timer(10.0, self.unlock_buttons)
+
+    def unlock_buttons(self):
+        """Unlock buttons after the lockout period."""
+        self.enable_recording_state = False
+        self.get_logger().info("Lockout period ended. Buttons re-enabled.")
 
     def calculate_motor_duty_cycle(self, value):
         if value > 0:
