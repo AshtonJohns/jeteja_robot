@@ -3,18 +3,35 @@ import pygame
 import cv2 as cv
 import pyrealsense2 as rs
 import numpy as np
+import json
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import LaserScan
+import os
+
+# Load configuration from test_config.json
+config_path = os.path.join(os.path.dirname(__file__), "test_config.json")
+with open(config_path, "r") as config_file:
+    params = json.load(config_file)
+
 
 def setup_realsense_camera():
-    # Configure both color and depth streams
-    pipeline = rs.pipeline()  # type: ignore
-    config = rs.config()  # type: ignore
+    """
+    Configure RealSense camera pipeline for both RGB and Depth streams.
+    """
+    pipeline = rs.pipeline()
+    config = rs.config()
     config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 60)  # RGB stream
     config.enable_stream(rs.stream.depth, 424, 240, rs.format.z16, 60)  # Depth stream
     pipeline.start(config)
     return pipeline
 
+
 def get_realsense_frame(pipeline):
-    # Wait for coherent color and depth frames
+    """
+    Capture frames from the RealSense camera pipeline.
+    Returns resized color and depth frames as NumPy arrays.
+    """
     frames = pipeline.wait_for_frames()
     color_frame = frames.get_color_frame()
     depth_frame = frames.get_depth_frame()
@@ -22,69 +39,165 @@ def get_realsense_frame(pipeline):
     if not color_frame or not depth_frame:
         return False, None, None
 
-    # Convert color and depth frames to NumPy arrays
     color_image = np.asanyarray(color_frame.get_data())
     depth_image = np.asanyarray(depth_frame.get_data())
 
-    # Resize images to 120x160
+    # Resize to target resolution (120x160)
     color_image_resized = cv.resize(color_image, (160, 120))
     depth_image_resized = cv.resize(depth_image, (160, 120))
 
     return True, color_image_resized, depth_image_resized
 
+
 def setup_serial(port, baudrate=115200):
-    ser = serial.Serial(port=port, baudrate=baudrate)
-    print(f"Serial connected on {ser.name}")
-    return ser
+    """
+    Initialize a serial connection.
+    """
+    try:
+        ser = serial.Serial(port=port, baudrate=baudrate)
+        print(f"Serial connected on {ser.name}")
+        return ser
+    except serial.SerialException as e:
+        print(f"Error opening serial port {port}: {e}")
+        return None
+
 
 def setup_joystick():
+    """
+    Initialize and return the first detected joystick.
+    """
     pygame.joystick.init()
+    if pygame.joystick.get_count() == 0:
+        raise Exception("No joystick detected!")
     js = pygame.joystick.Joystick(0)
     js.init()
+    print(f"Joystick initialized: {js.get_name()}")
     return js
 
+
+class LidarNode(Node):
+    """
+    ROS2 Node for receiving and processing LiDAR data.
+    """
+    def __init__(self):
+        super().__init__('lidar_node')
+        self.lidar_data = []
+        self.subscription = self.create_subscription(
+            LaserScan,
+            '/scan',
+            self.lidar_callback,
+            10
+        )
+
+    def lidar_callback(self, msg):
+        """
+        Callback to store LiDAR ranges.
+        """
+        self.lidar_data = np.array(msg.ranges)
+        self.lidar_data[self.lidar_data == float('inf')] = 25.0  # Replace inf with max range
+
+
 def encode_dutycylce(ax_val_st, ax_val_th, params):
-    # Constants
-    STEERING_AXIS = params['steering_joy_axis']
+    """
+    Calculate duty cycle for steering and throttle based on joystick input.
+    """
+    # Constants from configuration
     STEERING_CENTER = params['steering_center']
     STEERING_RANGE = params['steering_range']
     THROTTLE_STALL = params['throttle_stall']
     THROTTLE_FWD_RANGE = params['throttle_fwd_range']
     THROTTLE_REV_RANGE = params['throttle_rev_range']
 
-    # Calculate steering and throttle values
+    # Calculate steering duty cycle
     act_st = -ax_val_st
-    act_th = -ax_val_th  # throttle action: -1: max forward, 1: max backward
-
-    # Encode steering value to duty cycle in nanoseconds
     duty_st = STEERING_CENTER - STEERING_RANGE + int(STEERING_RANGE * (act_st + 1))
 
-    # Encode throttle value with refined variable speed control
+    # Calculate throttle duty cycle
+    act_th = -ax_val_th
     if act_th > 0:
-        # Forward motion
         duty_th = THROTTLE_STALL + int((THROTTLE_FWD_RANGE - THROTTLE_STALL) * act_th)
     elif act_th < 0:
-        # Reverse motion
         duty_th = THROTTLE_STALL - int((THROTTLE_STALL - THROTTLE_REV_RANGE) * abs(act_th))
     else:
-        # No throttle
         duty_th = THROTTLE_STALL
 
-    # Encode to message format
-    duty_st = round(duty_st, 2)
-    duty_th = round(duty_th, 2)
-    msg = encode(duty_st, duty_th)
-    return msg
+    return encode(duty_st, duty_th)
+
 
 def encode(duty_st, duty_th):
-    msg = (str(duty_st) + "," + str(duty_th) + "\n").encode('utf-8')
-    return msg
+    """
+    Encode steering and throttle values into a message format.
+    """
+    return f"{duty_st},{duty_th}\n".encode('utf-8')
 
-def encode_throttle(throttle_value, params):
-    throttle_limit = min(max(throttle_value, -1), 1)
-    if throttle_limit > 0:
-        return params['throttle_stall'] + int(params['throttle_fwd_range'] * throttle_limit)
-    elif throttle_limit < 0:
-        return params['throttle_stall'] + int(params['throttle_rev_range'] * throttle_limit)
-    else:
-        return params['throttle_stall']
+
+if __name__ == "__main__":
+    # Initialize ROS2 node for LiDAR
+    rclpy.init()
+    lidar_node = LidarNode()
+
+    # Setup RealSense camera
+    pipeline = setup_realsense_camera()
+
+    # Setup serial communication
+    ser = setup_serial("/dev/ttyUSB0")
+    if not ser:
+        sys.exit(1)
+
+    # Setup joystick
+    js = setup_joystick()
+
+    is_recording = False
+
+    try:
+        while True:
+            # Spin the LiDAR node to process incoming LiDAR messages
+            rclpy.spin_once(lidar_node, timeout_sec=0.1)
+            lidar_ranges = lidar_node.lidar_data
+
+            # Get frames from RealSense camera
+            success, color_frame, depth_frame = get_realsense_frame(pipeline)
+            if not success:
+                continue
+
+            # Display color and depth frames
+            combined_frame = cv.hconcat([color_frame, cv.applyColorMap(depth_frame, cv.COLORMAP_JET)])
+            cv.imshow('RGB and Depth', combined_frame)
+
+            # Handle joystick events
+            for e in pygame.event.get():
+                if e.type == pygame.JOYAXISMOTION:
+                    ax_val_st = js.get_axis(params['steering_joy_axis'])
+                    ax_val_th = js.get_axis(params['throttle_joy_axis'])
+                elif e.type == pygame.JOYBUTTONDOWN:
+                    if e.button == params['record_btn']:
+                        is_recording = not is_recording
+                        print("Recording toggled:", "ON" if is_recording else "OFF")
+                    elif e.button == params['stop_btn']:
+                        print("E-STOP PRESSED!")
+                        ser.write(b"END,END\n")
+                        raise KeyboardInterrupt
+                    elif e.button == params['pause_btn']:
+                        print("Paused")
+                        cv.waitKey(-1)  # Pause until any key is pressed
+
+            # Encode and send steering/throttle commands
+            if 'ax_val_st' in locals() and 'ax_val_th' in locals():
+                msg = encode_dutycylce(ax_val_st, ax_val_th, params)
+                ser.write(msg)
+
+            # Exit the loop if 'q' is pressed
+            if cv.waitKey(1) & 0xFF == ord('q'):
+                break
+
+    except KeyboardInterrupt:
+        print("Exiting program.")
+
+    finally:
+        # Cleanup resources
+        pipeline.stop()
+        rclpy.shutdown()
+        pygame.quit()
+        if ser:
+            ser.close()
+        cv.destroyAllWindows()

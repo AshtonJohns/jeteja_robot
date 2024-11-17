@@ -25,27 +25,37 @@ print(f"Using {DEVICE} device")
 
 class BearCartDataset(Dataset):
     """
-    Customized dataset for 4-channel RGB-depth combined images
+    Customized dataset for RGB and LiDAR combined data
     """
-    def __init__(self, annotations_file, img_dir):
+    def __init__(self, annotations_file, img_dir, lidar_dir):
         self.img_labels = pd.read_csv(annotations_file)
         self.img_dir = img_dir
+        self.lidar_dir = lidar_dir
         self.transform = v2.ToTensor()
 
     def __len__(self):
         return len(self.img_labels)
 
     def __getitem__(self, idx):
-        # Load 4-channel RGB-depth image
+        # Load RGB image
         img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
-        image = cv.imread(img_path, cv.IMREAD_UNCHANGED)  # Load 4-channel image directly
-        image = cv.resize(image, (160, 120))  # Ensure images are resized correctly
+        image = cv.imread(img_path, cv.IMREAD_COLOR)  # Load RGB image
+        image = cv.resize(image, (160, 120))  # Ensure consistent resolution
+
+        # Load LiDAR data
+        lidar_file = os.path.join(self.lidar_dir, self.img_labels.iloc[idx, 3])
+        lidar_data = np.load(lidar_file)  # Load LiDAR .npy file
+        lidar_data = np.resize(lidar_data, (160, 120))  # Resize to match RGB resolution
+
+        # Combine RGB and LiDAR into a single tensor
         image_tensor = self.transform(image)
+        lidar_tensor = torch.tensor(lidar_data, dtype=torch.float32).unsqueeze(0)  # Add channel dimension
+        combined_tensor = torch.cat((image_tensor, lidar_tensor), dim=0)  # 4-channel input
 
         # Steering and throttle values
         steering = self.img_labels.iloc[idx, 1].astype(np.float32)
         throttle = self.img_labels.iloc[idx, 2].astype(np.float32)
-        return image_tensor.float(), steering, throttle
+        return combined_tensor.float(), steering, throttle
 
 
 def train(dataloader, model, loss_fn, optimizer):
@@ -83,8 +93,9 @@ def test(dataloader, model, loss_fn):
 # Create a dataset
 data_dir = os.path.join(os.path.dirname(sys.path[0]), 'data', data_datetime)
 annotations_file = os.path.join(data_dir, 'labels.csv')
-img_dir = os.path.join(data_dir, 'combined_images')  # Update directory to combined images
-bearcart_dataset = BearCartDataset(annotations_file, img_dir)
+img_dir = os.path.join(data_dir, 'combined_images')  # RGB images directory
+lidar_dir = os.path.join(data_dir, 'lidar')  # LiDAR data directory
+bearcart_dataset = BearCartDataset(annotations_file, img_dir, lidar_dir)
 print(f"data length: {len(bearcart_dataset)}")
 
 # Create training and test dataloaders
@@ -96,7 +107,7 @@ train_dataloader = DataLoader(train_data, batch_size=125)
 test_dataloader = DataLoader(test_data, batch_size=125)
 
 # Create model
-model = convnets.DonkeyNet().to(DEVICE)
+model = convnets.DonkeyNet(in_channels=4).to(DEVICE)  # Adjust input channels
 # Hyper-parameters
 lr = 0.001
 optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0.0001)
@@ -132,7 +143,7 @@ torch.save(model.state_dict(), os.path.join(data_dir, f'{pilot_title}.pth'))
 print("Model weights saved")
 
 # ONNX export
-dummy_input = torch.randn(1, 4, 120, 160).to(DEVICE)  # Adjust shape for 120x160 RGB-depth
+dummy_input = torch.randn(1, 4, 120, 160).to(DEVICE)  # Adjust shape for 120x160 RGB-LiDAR
 onnx_model_path = os.path.join(data_dir, f'{pilot_title}.onnx')
 torch.onnx.export(model, dummy_input, onnx_model_path, opset_version=11)
 print(f"Model exported to ONNX format at: {onnx_model_path}")
