@@ -111,7 +111,7 @@ def generate_launch_description():
 
         teleop_launch,
 
-        # rs_launch,
+        rs_launch,
 
         rplidar_launch,
 
