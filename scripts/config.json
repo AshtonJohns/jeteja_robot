@@ -3,7 +3,7 @@
     "steering_joy_axis": 3,
     "steering_left": 1900000,
     "steering_right": 1100000,
-    "steering_center": 1400000,
+    "steering_center": 1500000,
     "steering_range": 350000,
     "steering_dir": 1,
     "throttle_joy_axis": 1,

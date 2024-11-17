@@ -11,7 +11,7 @@ from time import sleep
 
 # SETUP
 # Load configs
-params_file_path = os.path.join(os.path.dirname(sys.path[0]), 'config_new.json')
+params_file_path = os.path.join(os.path.dirname(sys.path[0]), 'test_config.json')
 params_file = open(params_file_path)
 params = json.load(params_file)
 # Constants
