@@ -10,7 +10,7 @@ setup(
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', ['launch/collect_data_launch.py']),
-        # ('share/' + package_name + '/data_processing', ['data_processing/extract_bags.py'])
+        ('share/' + package_name + '/config', ['config/topics.yaml'])
     ],
     install_requires=[
         'setuptools',         # Core dependency for ROS 2 packages
@@ -25,7 +25,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'extract_bags = data_processing.extract_bags:main',  # Entry point for extract_bags.py
+            'extract_bags = data_processing.extract_bags:main', 
+            'rosbag_manager = data_processing.rosbag_manager:main', 
         ],
     },
 )
