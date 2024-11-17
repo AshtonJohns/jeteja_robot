@@ -1,10 +1,14 @@
+
+camera_name: "realsense_d455"
 enable_color: true
-rgb_camera.profile: 1280x720x15
 enable_depth: true
-align_depth.enable: true
-enable_sync: true
-publish_tf: true
-tf_publish_rate: 1.0
+gyro_fps: 150  # Explicitly set FPS
+accel_fps: 150  # Explicitly set FPS
 color_width: 640
 color_height: 480
 color_fps: 30
+depth_width: 640
+depth_height: 480
+depth_fps: 30
+align_depth: true
+enable_pointcloud: true
