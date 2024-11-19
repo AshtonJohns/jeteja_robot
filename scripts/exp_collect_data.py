@@ -93,6 +93,8 @@ if not os.path.exists(label_path):
         writer = csv.writer(f)
         writer.writerow(["image_name", "steering", "throttle", "lidar_ranges"])
 
+# lidar to image
+angs = np.arange(0, 2*np.pi, 0.2*np.pi/180)
 try:
     while True:
         # Capture RGB frames from RealSense
@@ -107,51 +109,63 @@ try:
 
         # Get the LiDAR data
         lidar_data = np.array(lidar_node.lidar_data)
-        print(len(lidar_data))
-        lidar_data = np.pad(lidar_data, (0, 160 * 120 - len(lidar_data)), constant_values=25)
+        if len(lidar_data) is not 0:
+            limg = np.zeros((120, 160))
+            dx = lidar_data * np.cos(np.pi - angs) * 80/25
+            dy = lidar_data * np.sin(np.pi - angs) * 60/25
+            xs = 79 + dx.astype(np.int8)
+            ys = 59 + dy.astype(np.int8)
+            for xv in xs:
+                for yv in ys:
+                    limg[yv, xv] += 1
+            cv2.imshow('lidar image', limg)
+
+
+        # print(len(lidar_data))
+        # lidar_data = np.pad(lidar_data, (0, 160 * 120 - len(lidar_data)), constant_values=25)
         
 
-        # Replace 'inf' values with 25 meters (max range of A3 LiDAR)
-        lidar_data[np.isinf(lidar_data)] = 25.0
+        # # Replace 'inf' values with 25 meters (max range of A3 LiDAR)
+        # lidar_data[np.isinf(lidar_data)] = 25.0
 
-        lidar_image = lidar_data.reshape(120, 160)
+        # lidar_image = lidar_data.reshape(120, 160)
 
-        # Display the RGB image for visualization
-        cv2.imshow('RGB Stream', resized_color_image)
+        # # Display the RGB image for visualization
+        # cv2.imshow('RGB Stream', resized_color_image)
 
-        # Handle joystick inputs
-        for e in pygame.event.get():
-            if e.type == pygame.JOYAXISMOTION:
-                ax_val_st = round(js.get_axis(STEERING_AXIS), 2)
-                ax_val_th = round(js.get_axis(THROTTLE_AXIS), 2)
-            elif e.type == pygame.JOYBUTTONDOWN:
-                if js.get_button(RECORD_BUTTON):
-                    print("Collecting data")
-                    is_recording = not is_recording  # Toggle recording
-                elif js.get_button(STOP_BUTTON):
-                    print("E-STOP PRESSED. TERMINATE!")
-                    msg = ("END,END\n").encode('utf-8')
-                    ser_pico.write(msg)
-                    raise KeyboardInterrupt
+        # # Handle joystick inputs
+        # for e in pygame.event.get():
+        #     if e.type == pygame.JOYAXISMOTION:
+        #         ax_val_st = round(js.get_axis(STEERING_AXIS), 2)
+        #         ax_val_th = round(js.get_axis(THROTTLE_AXIS), 2)
+        #     elif e.type == pygame.JOYBUTTONDOWN:
+        #         if js.get_button(RECORD_BUTTON):
+        #             print("Collecting data")
+        #             is_recording = not is_recording  # Toggle recording
+        #         elif js.get_button(STOP_BUTTON):
+        #             print("E-STOP PRESSED. TERMINATE!")
+        #             msg = ("END,END\n").encode('utf-8')
+        #             ser_pico.write(msg)
+        #             raise KeyboardInterrupt
 
-        # Calculate steering and throttle values
-        act_st = -ax_val_st
-        act_th = -ax_val_th
-        duty_st = STEERING_CENTER - STEERING_RANGE + int(STEERING_RANGE * (act_st + 1))
+        # # Calculate steering and throttle values
+        # act_st = -ax_val_st
+        # act_th = -ax_val_th
+        # duty_st = STEERING_CENTER - STEERING_RANGE + int(STEERING_RANGE * (act_st + 1))
 
-        # Refined throttle control with correct forward and reverse mapping
-        if act_th > 0:
-            # Forward motion with variable speed control
-            duty_th = THROTTLE_STALL + int((THROTTLE_FWD_RANGE - THROTTLE_STALL) * act_th)
-        elif act_th < 0:
-            # Reverse motion with variable speed control
-            duty_th = THROTTLE_STALL - int((THROTTLE_STALL - THROTTLE_REV_RANGE) * abs(act_th))
-        else:
-            # No throttle
-            duty_th = THROTTLE_STALL
+        # # Refined throttle control with correct forward and reverse mapping
+        # if act_th > 0:
+        #     # Forward motion with variable speed control
+        #     duty_th = THROTTLE_STALL + int((THROTTLE_FWD_RANGE - THROTTLE_STALL) * act_th)
+        # elif act_th < 0:
+        #     # Reverse motion with variable speed control
+        #     duty_th = THROTTLE_STALL - int((THROTTLE_STALL - THROTTLE_REV_RANGE) * abs(act_th))
+        # else:
+        #     # No throttle
+        #     duty_th = THROTTLE_STALL
 
-        # Send control signals to the microcontroller
-        ser_pico.write((f"{duty_st},{duty_th}\n").encode('utf-8'))
+        # # Send control signals to the microcontroller
+        # ser_pico.write((f"{duty_st},{duty_th}\n").encode('utf-8'))
 
         # Spin the LiDAR Node to process ROS callbacks
         rclpy.spin_once(lidar_node)
@@ -160,20 +174,20 @@ try:
         lidar_ranges = lidar_node.lidar_data
 
         # Save data if recording is active
-        if is_recording:
-            # Save RGB and LiDAR images
-            rgb_image_name = f"{frame_counts}_rgb.png"
-            lidar_image_name = f"{frame_counts}_lidar.npy"  # Save LiDAR as .npy
+        # if is_recording:
+        #     # Save RGB and LiDAR images
+        #     rgb_image_name = f"{frame_counts}_rgb.png"
+        #     lidar_image_name = f"{frame_counts}_lidar.npy"  # Save LiDAR as .npy
 
-            cv2.imwrite(os.path.join(rgb_image_dir, rgb_image_name), resized_color_image)
-            np.save(os.path.join(lidar_image_dir, lidar_image_name), lidar_image)  # Save LiDAR data as .npy
+        #     cv2.imwrite(os.path.join(rgb_image_dir, rgb_image_name), resized_color_image)
+        #     np.save(os.path.join(lidar_image_dir, lidar_image_name), lidar_image)  # Save LiDAR data as .npy
 
-            # Log joystick values and LiDAR ranges with image name
-            with open(label_path, 'a+', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow([rgb_image_name, ax_val_st, ax_val_th, lidar_image_name])
+        #     # Log joystick values and LiDAR ranges with image name
+        #     with open(label_path, 'a+', newline='') as f:
+        #         writer = csv.writer(f)
+        #         writer.writerow([rgb_image_name, ax_val_st, ax_val_th, lidar_image_name])
 
-            frame_counts += 1  # Increment frame counter
+        #     frame_counts += 1  # Increment frame counter
 
         # Exit the loop if 'q' is pressed
         if cv2.waitKey(1) & 0xFF == ord('q'):
