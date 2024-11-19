@@ -144,7 +144,7 @@ plt.plot(range(epochs), test_losses, 'orange', label='Test')
 plt.xlabel('Epoch')
 plt.ylabel('MSE Loss')
 plt.ylim(0.0, 0.1)
-plt.yticks(np.arange(0, 0.11, 0.01))  # Set y-axis ticks from 0 to 0.1 in steps of 0.01
+plt.yticks(np.arange(0, 0.15, 0.01))  # Set y-axis ticks from 0 to 0.1 in steps of 0.01
 plt.grid(True)
 plt.legend()
 plt.title(pilot_title)
