@@ -107,8 +107,20 @@ try:
 
         # Get the LiDAR data
         lidar_data = np.array(lidar_node.lidar_data)
+
+        # Replace 'inf' values with 25 meters (max range of A3 LiDAR) before padding
+        lidar_data[np.isinf(lidar_data)] = 25.0
+
+        # Pad the LiDAR data to match the required size of 120x160
         lidar_data = np.pad(lidar_data, (0, 160 * 120 - len(lidar_data)), constant_values=25)
+
+        # Reshape to match the required image size (120x160)
         lidar_image = lidar_data.reshape(120, 160)
+
+        # Ensure there are no additional issues with reshaping
+        if lidar_image.shape != (120, 160):
+            print("Error: LiDAR data cannot be reshaped to (120, 160)")
+            continue
 
         # Display the RGB image for visualization
         cv2.imshow('RGB Stream', resized_color_image)
@@ -181,3 +193,4 @@ finally:
     pipeline.stop()
     pygame.quit()
     ser_pico.close()
+    rclpy.shutdown()

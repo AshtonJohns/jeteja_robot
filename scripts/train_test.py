@@ -5,7 +5,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset, random_split
-from torchvision.transforms import v2
+from torchvision import transforms
 import matplotlib.pyplot as plt
 import convnets
 import cv2 as cv
@@ -22,7 +22,6 @@ else:
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using {DEVICE} device")
 
-
 class BearCartDataset(Dataset):
     """
     Customized dataset for RGB and LiDAR combined data
@@ -31,7 +30,7 @@ class BearCartDataset(Dataset):
         self.img_labels = pd.read_csv(annotations_file)
         self.img_dir = img_dir
         self.lidar_dir = lidar_dir
-        self.transform = v2.ToTensor()
+        self.transform = transforms.ToTensor()
 
     def __len__(self):
         return len(self.img_labels)
@@ -45,11 +44,12 @@ class BearCartDataset(Dataset):
         # Load LiDAR data
         lidar_file = os.path.join(self.lidar_dir, self.img_labels.iloc[idx, 3])
         lidar_data = np.load(lidar_file)  # Load LiDAR .npy file
-        lidar_data = np.resize(lidar_data, (160, 120))  # Resize to match RGB resolution
+        lidar_data = cv.resize(lidar_data, (160, 120))  # Resize to match RGB resolution
+        lidar_data = np.expand_dims(lidar_data, axis=-1)  # Add channel dimension
 
         # Combine RGB and LiDAR into a single tensor
         image_tensor = self.transform(image)
-        lidar_tensor = torch.tensor(lidar_data, dtype=torch.float32).unsqueeze(0)  # Add channel dimension
+        lidar_tensor = torch.tensor(lidar_data, dtype=torch.float32).permute(2, 0, 1)  # Reshape for CNN input
         combined_tensor = torch.cat((image_tensor, lidar_tensor), dim=0)  # 4-channel input
 
         # Steering and throttle values
