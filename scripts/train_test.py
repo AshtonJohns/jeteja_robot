@@ -5,7 +5,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset, random_split
-from torchvision import transforms
+from torchvision.transforms import v2
 import matplotlib.pyplot as plt
 import convnets
 import cv2 as cv
@@ -30,27 +30,39 @@ class BearCartDataset(Dataset):
         self.img_labels = pd.read_csv(annotations_file)
         self.img_dir = img_dir
         self.lidar_dir = lidar_dir
-        self.transform = transforms.ToTensor()
+        self.transform = v2.ToTensor()
 
     def __len__(self):
         return len(self.img_labels)
 
     def __getitem__(self, idx):
         # Load RGB image
-        img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
-        image = cv.imread(img_path, cv.IMREAD_COLOR)  # Load RGB image
-        image = cv.resize(image, (160, 120))  # Ensure consistent resolution
+        img_name = self.img_labels.iloc[idx, 0]  # Image name from the labels.csv
+        img_path = os.path.join(self.img_dir, img_name)
+        image = cv.imread(img_path, cv.IMREAD_COLOR)
+        if image is None:
+            raise FileNotFoundError(f"Error: Could not read RGB image at {img_path}")
+        image = cv.resize(image, (160, 120))  # Ensure consistent resolution (120, 160)
 
         # Load LiDAR data
-        lidar_file = os.path.join(self.lidar_dir, self.img_labels.iloc[idx, 3])
-        lidar_data = np.load(lidar_file)  # Load LiDAR .npy file
-        lidar_data = cv.resize(lidar_data, (160, 120))  # Resize to match RGB resolution
-        lidar_data = np.expand_dims(lidar_data, axis=-1)  # Add channel dimension
+        lidar_name = self.img_labels.iloc[idx, 3]  # LiDAR filename from the labels.csv
+        lidar_path = os.path.join(self.lidar_dir, lidar_name)
+        if not os.path.exists(lidar_path):
+            raise FileNotFoundError(f"Error: LiDAR file {lidar_path} not found.")
+        
+        lidar_data = np.load(lidar_path)  # Load LiDAR .npy file
+        
+        # If LiDAR data is 1D (e.g., a 360-degree scan), reshape it to fit the 120x160 grid
+        if lidar_data.ndim == 1:
+            # Optionally, resize or interpolate LiDAR data to match the image dimensions
+            lidar_data = np.resize(lidar_data, (120, 160))  # Reshape to the required resolution
 
-        # Combine RGB and LiDAR into a single tensor
+        # Convert images and LiDAR data to tensor format
         image_tensor = self.transform(image)
-        lidar_tensor = torch.tensor(lidar_data, dtype=torch.float32).permute(2, 0, 1)  # Reshape for CNN input
-        combined_tensor = torch.cat((image_tensor, lidar_tensor), dim=0)  # 4-channel input
+        lidar_tensor = torch.tensor(lidar_data, dtype=torch.float32).unsqueeze(0)  # Add a channel dimension for LiDAR
+
+        # Combine RGB and LiDAR into a single tensor (4 channels)
+        combined_tensor = torch.cat((image_tensor, lidar_tensor), dim=0)
 
         # Steering and throttle values
         steering = self.img_labels.iloc[idx, 1].astype(np.float32)
@@ -93,8 +105,8 @@ def test(dataloader, model, loss_fn):
 # Create a dataset
 data_dir = os.path.join(os.path.dirname(sys.path[0]), 'data', data_datetime)
 annotations_file = os.path.join(data_dir, 'labels.csv')
-img_dir = os.path.join(data_dir, 'combined_images')  # RGB images directory
-lidar_dir = os.path.join(data_dir, 'lidar')  # LiDAR data directory
+img_dir = os.path.join(data_dir, 'rgb_images')  # RGB images directory
+lidar_dir = os.path.join(data_dir, 'lidar_images')  # LiDAR data directory
 bearcart_dataset = BearCartDataset(annotations_file, img_dir, lidar_dir)
 print(f"data length: {len(bearcart_dataset)}")
 
