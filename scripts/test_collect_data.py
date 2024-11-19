@@ -61,18 +61,15 @@ js = pygame.joystick.Joystick(0)
 
 data_dir = os.path.join('data', datetime.now().strftime("%Y-%m-%d-%H-%M"))
 rgb_image_dir = os.path.join(data_dir, 'rgb_images/')
-depth_image_dir = os.path.join(data_dir, 'depth_images/')
-combined_image_dir = os.path.join(data_dir, 'combined_images/')
+lidar_image_dir = os.path.join(data_dir, 'lidar_images/')
 label_path = os.path.join(data_dir, 'labels.csv')
 os.makedirs(rgb_image_dir, exist_ok=True)
-os.makedirs(depth_image_dir, exist_ok=True)
-os.makedirs(combined_image_dir, exist_ok=True)
+os.makedirs(lidar_image_dir, exist_ok=True)
 
-# Initialize RealSense camera pipeline for RGB and Depth
+# Initialize RealSense camera pipeline for RGB
 pipeline = rs.pipeline()
 config = rs.config()
 config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 60)
-config.enable_stream(rs.stream.depth, 424, 240, rs.format.z16, 60)  # Enable depth stream
 
 # Start streaming from the camera
 pipeline.start(config)
@@ -98,33 +95,20 @@ if not os.path.exists(label_path):
 
 try:
     while True:
-        # Capture RGB and Depth frames from RealSense
+        # Capture RGB frames from RealSense
         frames = pipeline.wait_for_frames()
         color_frame = frames.get_color_frame()
-        depth_frame = frames.get_depth_frame()
-        if not color_frame or not depth_frame:
-            continue  # Skip if frames are not ready
+        if not color_frame:
+            continue  # Skip if frame is not ready
 
-        # Convert RGB and depth to numpy arrays and resize to 120x160
+        # Convert RGB to numpy array and resize to 120x160
         color_image = np.asanyarray(color_frame.get_data())
         resized_color_image = cv2.resize(color_image, (160, 120))
-        
-        depth_image = np.asanyarray(depth_frame.get_data())
-        depth_image_normalized = cv2.normalize(depth_image, None, 0, 255, cv2.NORM_MINMAX)
-        resized_depth_image = cv2.resize(depth_image_normalized, (160, 120)).astype(np.uint8)
 
-        # Create a combined 5-channel image (RGB + Depth + LiDAR)
-        depth_image_expanded = np.expand_dims(resized_depth_image, axis=-1)
-
-        # Get the LiDAR data and pad with max distance (25 meters for LiDAR) to match the depth image size
+        # Get the LiDAR data
         lidar_data = np.array(lidar_node.lidar_data)
         lidar_data = np.pad(lidar_data, (0, 160 * 120 - len(lidar_data)), constant_values=25)
         lidar_image = lidar_data.reshape(120, 160)
-
-        # Stack RGB, depth, and LiDAR into a 5-channel input image
-        combined_image = np.concatenate(
-            (resized_color_image, depth_image_expanded, lidar_image[..., None]), axis=-1
-        )
 
         # Display the RGB image for visualization
         cv2.imshow('RGB Stream', resized_color_image)
@@ -148,7 +132,7 @@ try:
         act_st = -ax_val_st
         act_th = -ax_val_th
         duty_st = STEERING_CENTER - STEERING_RANGE + int(STEERING_RANGE * (act_st + 1))
-        
+
         # Refined throttle control with correct forward and reverse mapping
         if act_th > 0:
             # Forward motion with variable speed control
@@ -171,19 +155,17 @@ try:
 
         # Save data if recording is active
         if is_recording:
-            # Save RGB, Depth, and combined images
+            # Save RGB and LiDAR images
             rgb_image_name = f"{frame_counts}_rgb.png"
-            depth_image_name = f"{frame_counts}_depth.png"
-            combined_image_name = f"{frame_counts}_combined.png"
+            lidar_image_name = f"{frame_counts}_lidar.png"
 
             cv2.imwrite(os.path.join(rgb_image_dir, rgb_image_name), resized_color_image)
-            cv2.imwrite(os.path.join(depth_image_dir, depth_image_name), resized_depth_image)
-            cv2.imwrite(os.path.join(combined_image_dir, combined_image_name), combined_image)
+            cv2.imwrite(os.path.join(lidar_image_dir, lidar_image_name), lidar_image)
 
             # Log joystick values and LiDAR ranges with image name
             with open(label_path, 'a+', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow([combined_image_name, ax_val_st, ax_val_th, lidar_ranges])
+                writer.writerow([lidar_image_name, ax_val_st, ax_val_th, lidar_ranges])
 
             frame_counts += 1  # Increment frame counter
 

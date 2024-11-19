@@ -17,12 +17,11 @@ with open(config_path, "r") as config_file:
 
 def setup_realsense_camera():
     """
-    Configure RealSense camera pipeline for both RGB and Depth streams.
+    Configure RealSense camera pipeline for RGB stream (no depth stream).
     """
     pipeline = rs.pipeline()
     config = rs.config()
     config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 60)  # RGB stream
-    config.enable_stream(rs.stream.depth, 424, 240, rs.format.z16, 60)  # Depth stream
     pipeline.start(config)
     return pipeline
 
@@ -30,23 +29,20 @@ def setup_realsense_camera():
 def get_realsense_frame(pipeline):
     """
     Capture frames from the RealSense camera pipeline.
-    Returns resized color and depth frames as NumPy arrays.
+    Returns resized color frame as a NumPy array.
     """
     frames = pipeline.wait_for_frames()
     color_frame = frames.get_color_frame()
-    depth_frame = frames.get_depth_frame()
 
-    if not color_frame or not depth_frame:
-        return False, None, None
+    if not color_frame:
+        return False, None
 
     color_image = np.asanyarray(color_frame.get_data())
-    depth_image = np.asanyarray(depth_frame.get_data())
 
     # Resize to target resolution (120x160)
     color_image_resized = cv.resize(color_image, (160, 120))
-    depth_image_resized = cv.resize(depth_image, (160, 120))
 
-    return True, color_image_resized, depth_image_resized
+    return True, color_image_resized
 
 
 def setup_serial(port, baudrate=115200):
@@ -94,7 +90,7 @@ class LidarNode(Node):
         Callback to store LiDAR ranges.
         """
         self.lidar_data = np.array(msg.ranges)
-        self.lidar_data[self.lidar_data == float('inf')] = 25.0  # Replace inf with max range
+        self.lidar_data[self.lidar_data == float('inf')] = 25.0  # Replace inf with max range (25 meters)
 
 
 def encode_dutycylce(ax_val_st, ax_val_th, params):
@@ -156,13 +152,12 @@ if __name__ == "__main__":
             lidar_ranges = lidar_node.lidar_data
 
             # Get frames from RealSense camera
-            success, color_frame, depth_frame = get_realsense_frame(pipeline)
+            success, color_frame = get_realsense_frame(pipeline)
             if not success:
                 continue
 
-            # Display color and depth frames
-            combined_frame = cv.hconcat([color_frame, cv.applyColorMap(depth_frame, cv.COLORMAP_JET)])
-            cv.imshow('RGB and Depth', combined_frame)
+            # Display color frame
+            cv.imshow('RGB Stream', color_frame)
 
             # Handle joystick events
             for e in pygame.event.get():

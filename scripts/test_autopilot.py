@@ -2,7 +2,7 @@ import os
 import sys
 import json
 import torch
-from hardware import get_realsense_frame, setup_realsense_camera, setup_serial, setup_joystick, encode_dutycylce, encode_throttle, encode
+from hardware import get_realsense_frame, setup_realsense_camera, setup_serial, setup_joystick, encode_dutycylce, encode_throttle
 from torchvision import transforms
 import pygame
 import cv2 as cv
@@ -47,6 +47,7 @@ try:
     ser_pico = setup_serial(port='/dev/ttyACM0', baudrate=115200)
 except:
     ser_pico = setup_serial(port='/dev/ttyACM1', baudrate=115200)
+
 cam = setup_realsense_camera()
 js = setup_joystick()
 
@@ -65,6 +66,7 @@ pygame.init()
 # MAIN LOOP
 try:
     while True:
+        # Get both RGB and LiDAR frames
         ret, frame = get_realsense_frame(cam)
         if not ret or frame is None:
             print("No frame received. TERMINATE!")
@@ -81,7 +83,7 @@ try:
         # Process the frame for prediction
         img_tensor = to_tensor(cv.resize(frame, (160, 120))).unsqueeze(0)  # Resize to 120x160 and add batch dimension
         pred_st, pred_th = model(img_tensor).squeeze()
-        
+
         # Clip predictions to valid range
         st_trim = max(min(float(pred_st), 0.999), -0.999)
         th_trim = max(min(float(pred_th), 0.999), -0.999)
@@ -90,23 +92,26 @@ try:
         if not is_paused:
             msg = encode_dutycylce(st_trim, th_trim, params)
         else:
-            duty_st, duty_th = params['steering_center'], params['throttle_stall']
-            msg = encode(duty_st, duty_th)
+            duty_st, duty_th = params['steering_center'], params['steering_center']  # Set to center if paused
+            msg = encode_dutycylce(duty_st, duty_th, params)
 
-        ser_pico.write(msg)
+        # Send message to hardware
+        if ser_pico is not None:
+            ser_pico.write(msg)
 
-        # Calculate and print frame rate
+        # Frame rate calculation and display
         frame_count += 1
-        current_time = time()
-        if current_time - prev_time >= 1.0:
-            fps = frame_count / (current_time - prev_time)
-            print(f"Autopilot Frame Rate: {fps:.2f} FPS")
-            prev_time = current_time
+        if time() - prev_time >= 1:
+            fps = frame_count
             frame_count = 0
+            prev_time = time()
+            print(f"FPS: {fps}")
 
 except KeyboardInterrupt:
-    print("Terminated by user.")
+    print("Autopilot terminated by user.")
+
 finally:
-    pygame.joystick.quit()
-    ser_pico.close()
-    cv.destroyAllWindows()
+    if ser_pico:
+        ser_pico.close()
+    pygame.quit()
+    print("Autopilot cleanup complete.")

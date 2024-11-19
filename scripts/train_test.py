@@ -107,7 +107,7 @@ train_dataloader = DataLoader(train_data, batch_size=125)
 test_dataloader = DataLoader(test_data, batch_size=125)
 
 # Create model
-model = convnets.DonkeyNet(in_channels=4).to(DEVICE)  # Adjust input channels
+model = convnets.DonkeyNet().to(DEVICE)  # Adjust input channels to 4 (RGB + LiDAR)
 # Hyper-parameters
 lr = 0.001
 optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0.0001)

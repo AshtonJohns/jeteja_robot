@@ -3,8 +3,8 @@ import torch.nn as nn
 class DonkeyNet(nn.Module):
     def __init__(self):
         super().__init__()
-        # Updated input channels to 5 for RGB, depth, and LiDAR
-        self.conv24 = nn.Conv2d(5, 24, kernel_size=(5, 5), stride=(2, 2))  #4 for rgb/depth, 5 for rgb/depth/lidar
+        # Updated input channels to 4 for RGB and LiDAR
+        self.conv24 = nn.Conv2d(4, 24, kernel_size=(5, 5), stride=(2, 2))  # 4 for rgb/lidar
         self.conv32 = nn.Conv2d(24, 32, kernel_size=(5, 5), stride=(2, 2))
         self.conv64_5 = nn.Conv2d(32, 64, kernel_size=(5, 5), stride=(2, 2))
         self.conv64_3 = nn.Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1))
