@@ -22,3 +22,4 @@ teleop_twist_joy_node:
     require_enable_button: false
     # enable_button: 3           # Enable/disable teleop control (e.g., trigger button)
     # enable_turbo_button: 5      # Turbo mode button (optional, e.g., button 2)
+    # autorepeat_rate: 30
