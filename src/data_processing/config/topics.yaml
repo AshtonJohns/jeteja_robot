@@ -1,9 +1,11 @@
 topics:
-  - /camera/camera/color/camera_info
-  - /camera/camera/color/image_raw
-  - /camera/camera/color/metadata
-  - /camera/camera/depth/camera_info
-  - /camera/camera/depth/image_rect_raw
-  - /camera/camera/depth/metadata
-  - /camera/camera/extrinsics/depth_to_color
-  - /cmd_vel
+  - /camera/color/camera_info
+  - /camera/color/image_raw
+  # - /camera/color/metadata
+  # - /camera/depth/camera_info
+  # - /camera/depth/image_rect_raw
+  # - /camera/depth/metadata
+  # - /camera/extrinsics/depth_to_color
+  # - /cmd_vel
+  - /cmd_vel_stamped
+  - /scan
