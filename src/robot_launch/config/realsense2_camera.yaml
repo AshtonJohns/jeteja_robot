@@ -25,3 +25,4 @@ depth_module.laser_power: 300 # Laser intensity at cost of power consumption
 
 
 # REMEMBER ! ros2 param describe|list
+# BRG8 - 8bit per channel
