@@ -67,10 +67,10 @@ def extract_rosbag(bag_files, output_dir):
         type_map = {t.name: t.type for t in topic_types}
 
         while reader.has_next():
-            topic, msg_data, _ = reader.read_next()
+            topic, msg_data, timestamp = reader.read_next()
 
             # Process color images
-            if topic == '/camera/camera/color/image_raw':
+            if topic == '/camera/color/image_raw':
                 image_msg = deserialize_message(msg_data, get_message(type_map[topic]))
                 cv_image = bridge.imgmsg_to_cv2(image_msg, desired_encoding='bgr8')
                 timestamp = f"{image_msg.header.stamp.sec}_{image_msg.header.stamp.nanosec}"
@@ -78,7 +78,7 @@ def extract_rosbag(bag_files, output_dir):
                 cv2.imwrite(image_filename, cv_image)
 
             # Process depth images
-            elif topic == '/camera/camera/depth/image_rect_raw':
+            elif topic == '/camera/depth/image_rect_raw':
                 depth_msg = deserialize_message(msg_data, get_message(type_map[topic]))
                 depth_image = bridge.imgmsg_to_cv2(depth_msg, desired_encoding='passthrough')
                 timestamp = f"{depth_msg.header.stamp.sec}_{depth_msg.header.stamp.nanosec}"
@@ -86,11 +86,21 @@ def extract_rosbag(bag_files, output_dir):
                 cv2.imwrite(depth_filename, depth_image)
 
             # Process command velocities
-            elif topic == '/cmd_vel':
+            elif topic == '/cmd_vel_stamped':
+                # Deserialize the TwistStamped message
                 command_msg = deserialize_message(msg_data, get_message(type_map[topic]))
-                linear_x = command_msg.linear.x
-                angular_z = command_msg.angular.z
-                # Save the command to CSV
+                linear_x = command_msg.twist.linear.x
+                angular_z = command_msg.twist.angular.z
+
+                # Use the header's timestamp
+                sec = command_msg.header.stamp.sec
+                nanosec = command_msg.header.stamp.nanosec
+                timestamp_str = f"{sec}_{nanosec}"
+
+                # Construct an image filename (if applicable)
+                image_filename = f"color_{timestamp_str}.jpg"
+                
+                # Save the command to the CSV
                 csv_writer.writerow([image_filename, linear_x, angular_z])
 
             # Process laser scan data
@@ -104,14 +114,14 @@ def extract_rosbag(bag_files, output_dir):
                     }, scan_file)
 
             # Process metadata topics (if needed)
-            elif topic in ['/camera/camera/color/metadata', '/camera/camera/depth/metadata']:
+            elif topic in ['/camera/color/metadata', '/camera/depth/metadata']:
                 metadata_msg = deserialize_message(msg_data, get_message(type_map[topic]))
                 metadata_filename = os.path.join(output_dir, f"{topic.split('/')[-1]}_{metadata_msg.header.stamp.sec}.yaml")
                 with open(metadata_filename, 'w') as metadata_file:
                     yaml.dump({'data': str(metadata_msg)}, metadata_file)
 
             # Extrinsics (if needed)
-            elif topic == '/camera/camera/extrinsics/depth_to_color':
+            elif topic == '/camera/extrinsics/depth_to_color':
                 extrinsics_msg = deserialize_message(msg_data, get_message(type_map[topic]))
                 extrinsics_filename = os.path.join(output_dir, 'extrinsics.yaml')
                 with open(extrinsics_filename, 'w') as extrinsics_file:
