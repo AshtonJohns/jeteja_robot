@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'remote_control_handler = robot_launch.remote_control_handler:main',
+            'cmd_vel_fixed_rate = robot_launch.cmd_vel_fixed_rate:main',
         ],
     },
 )

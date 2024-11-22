@@ -92,7 +92,8 @@ class RemoteControlHandler(Node):
         self.enable_recording_state = False
 
         # Subscribers and publishers
-        self.cmd_vel_subscription = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 15) # not timestamped
+        self.cmd_vel_subscription = self.create_subscription(Twist, '/cmd_vel_fixed_rate', self.cmd_vel_callback, 15) # not timestamped, but a steady publish rate
+        # self.cmd_vel_subscription = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 15) # not timestamped
         # self.cmd_vel_subscription = self.create_subscription(TwistStamped, '/cmd_vel_stamped', self.cmd_vel_callback, 30) # timestamped, 30 hz for 60 fps
         # NOTE we don't need the time stamped /cmd_vel for the pico
         self.joy_subscription = self.create_subscription(Joy, '/joy', self.joy_callback, 10)

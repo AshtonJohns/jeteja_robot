@@ -16,6 +16,12 @@ def generate_launch_description():
         'teleop_twist_joy.yaml'
     )
 
+    # joy_config = join(
+    #     get_package_share_directory('robot_launch'),
+    #     'config',
+    #     'joy.yaml'
+    # )
+
     teleop_twist_joy_launch_path = join(
         get_package_share_directory('teleop_twist_joy'),
         'launch',
@@ -70,11 +76,25 @@ def generate_launch_description():
         description='Path to the teleop_twist_joy configuration file'
     )
 
+    # declare_joy_config_arg = DeclareLaunchArgument(
+    #     'joy_config_filepath',
+    #     default_value=joy_config,
+    #     description='Path to the joy configuration file'
+    # )
+
     teleop_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(teleop_twist_joy_launch_path),
         launch_arguments={
             'config_filepath': LaunchConfiguration('teleop_config_filepath'),
+            # 'joy_config': LaunchConfiguration('joy_config_filepath')
         }.items()
+    )
+
+    cmd_vel_fixed_rate_node = Node(
+        package='robot_launch',
+        executable='cmd_vel_fixed_rate',
+        name='cmd_vel_fixed_rate',
+        output='screen',
     )
 
     twist_stamper_node = Node(
@@ -82,8 +102,8 @@ def generate_launch_description():
         executable='twist_stamper',
         name='twist_stamper',
         remappings=[
-            ('/cmd_vel_in', '/cmd_vel'),  # Input is the original /cmd_vel
-            ('/cmd_vel_out', '/cmd_vel_stamped')  # Output is a new topic
+            ('/cmd_vel_in', '/cmd_vel_fixed_rate'),  # Input: Rate-adjusted topic
+            ('/cmd_vel_out', '/cmd_vel_stamped')    # Output: Stamped topic
         ]
     )
 
@@ -124,6 +144,8 @@ def generate_launch_description():
         remote_control_handler_node,
 
         teleop_launch,
+
+        cmd_vel_fixed_rate_node,
 
         twist_stamper_node,
 
