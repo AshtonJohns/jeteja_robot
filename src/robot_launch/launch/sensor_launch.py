@@ -72,7 +72,19 @@ def generate_launch_description():
 
     teleop_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(teleop_twist_joy_launch_path),
-        launch_arguments={'config_filepath': LaunchConfiguration('teleop_config_filepath')}.items()
+        launch_arguments={
+            'config_filepath': LaunchConfiguration('teleop_config_filepath'),
+        }.items()
+    )
+
+    twist_stamper_node = Node(
+        package='twist_stamper',
+        executable='twist_stamper',
+        name='twist_stamper',
+        remappings=[
+            ('/cmd_vel_in', '/cmd_vel'),  # Input is the original /cmd_vel
+            ('/cmd_vel_out', '/cmd_vel_stamped')  # Output is a new topic
+        ]
     )
 
     declare_realsense_config_arg = DeclareLaunchArgument(
@@ -112,6 +124,8 @@ def generate_launch_description():
         remote_control_handler_node,
 
         teleop_launch,
+
+        twist_stamper_node,
 
         rs_launch,
 

@@ -5,7 +5,7 @@ import os
 import rclpy
 from std_msgs.msg import String
 from rclpy.node import Node
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, TwistStamped
 from sensor_msgs.msg import Joy
 from ament_index_python.packages import get_package_share_directory
 
@@ -91,10 +91,11 @@ class RemoteControlHandler(Node):
         self.recording_state = False
         self.enable_recording_state = False
 
-        # Subscribe to /cmd_vel and /joy
-        self.cmd_vel_subscription = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
+        # Subscribers and publishers
+        self.cmd_vel_subscription = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 15) # not timestamped
+        # self.cmd_vel_subscription = self.create_subscription(TwistStamped, '/cmd_vel_stamped', self.cmd_vel_callback, 30) # timestamped, 30 hz for 60 fps
+        # NOTE we don't need the time stamped /cmd_vel for the pico
         self.joy_subscription = self.create_subscription(Joy, '/joy', self.joy_callback, 10)
-        self.subscription = self.create_subscription(Joy, '/joy', self.joy_callback, 10)
         self.recording_status_pub = self.create_publisher(String, '/recording_status', 10)
 
     def set_serial(self):
@@ -123,9 +124,10 @@ class RemoteControlHandler(Node):
 
     def cmd_vel_callback(self, msg):
         if self.microcontroller_state:
+            # linear_x = msg.twist.linear.x
+            # angular_z = msg.twist.angular.z
             linear_x = msg.linear.x
             angular_z = msg.angular.z
-
             # Convert to PWM duty cycle
             speed_duty_cycle = self.calculate_motor_duty_cycle(linear_x)
             steering_duty_cycle = self.calculate_steering_duty_cycle(angular_z)
