@@ -1,24 +1,27 @@
+camera_name: "realsense_d435i"
 
-camera_name: "realsense_d455"
-rgb_camera.profile: "1920x1080x30"
+# Enable streams
 enable_color: true
-enable_depth: false
+enable_depth: true  # Enable depth stream
 enable_infra: false
 enable_accel: false
 enable_gyro: false
 enable_infra1: false
 enable_infra2: false
 enable_rgbd: false
-enable_sync: false
+enable_sync: true  # Synchronize color and depth streams for alignment
 
-# gyro_fps: 150  
-# accel_fps: 150 
-# color_width: 640
-# color_height: 360
-# color_fps: 60
-# depth_width: 640
-# depth_height: 480
-# depth_fps: 30
-# align_depth: true
-# enable_pointcloud: true
-rgb_camera.power_line_frequency: 2
+# Color camera settings
+rgb_camera.profile: 640x360x60  # Resolution and framerate
+rgb_camera.power_line_frequency: 2  # Reduce flickering in indoor lighting
+rgb_camera.enable_auto_exposure: true # See depth_module.enable_auto_exposure
+
+# Depth camera settings
+depth_module.profile: 640x360x60  # Depth resolution and FPS
+align_depth: true  # Align depth to color image
+enable_pointcloud: false
+depth_module.enable_auto_exposure: true # Automatically adjusts exposure for depth sensing in varying lighting.
+depth_module.laser_power: 300 # Laser intensity at cost of power consumption
+
+
+# REMEMBER ! ros2 param describe|list

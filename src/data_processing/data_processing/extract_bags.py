@@ -36,16 +36,26 @@ def extract_rosbag(bag_files, output_dir):
     Extract data from multiple rosbag files sequentially.
 
     Args:
-        bag_files (list): List of paths to rosbag `.db3` files.
+        bag_files (list): List of paths to rosbag `.db3` files. (Ensure they are sorted!)
         output_dir (str): Directory where extracted data will be saved.
     """
     os.makedirs(output_dir, exist_ok=True)
-    images_dir = os.path.join(output_dir, "images")
-    os.makedirs(images_dir, exist_ok=True)
 
+    # Separate directories for color and depth images
+    color_images_dir = os.path.join(output_dir, "color_images")
+    os.makedirs(color_images_dir, exist_ok=True)
+
+    depth_images_dir = os.path.join(output_dir, "depth_images")
+    os.makedirs(depth_images_dir, exist_ok=True)
+
+    # Directory for scans
+    scan_dir = os.path.join(output_dir, "scans")
+    os.makedirs(scan_dir, exist_ok=True)
+
+    # CSV file for commands
     csv_file = open(os.path.join(output_dir, 'commands.csv'), 'w', newline='')
     csv_writer = csv.writer(csv_file)
-    csv_writer.writerow(['image_filename', 'linear_x', 'angular_z'])
+    csv_writer.writerow(['color_image_filename', 'depth_image_filename', 'linear_x', 'angular_z'])
 
     bridge = CvBridge()
     reader = SequentialReader()
@@ -73,17 +83,17 @@ def extract_rosbag(bag_files, output_dir):
             if topic == '/camera/color/image_raw':
                 image_msg = deserialize_message(msg_data, get_message(type_map[topic]))
                 cv_image = bridge.imgmsg_to_cv2(image_msg, desired_encoding='bgr8')
-                timestamp = f"{image_msg.header.stamp.sec}_{image_msg.header.stamp.nanosec}"
-                image_filename = os.path.join(images_dir, f"color_{timestamp}.jpg")
-                cv2.imwrite(image_filename, cv_image)
+                timestamp_str = f"{image_msg.header.stamp.sec}_{image_msg.header.stamp.nanosec}"
+                color_image_filename = os.path.join(color_images_dir, f"color_{timestamp_str}.jpg")
+                cv2.imwrite(color_image_filename, cv_image)
 
             # Process depth images
             elif topic == '/camera/depth/image_rect_raw':
                 depth_msg = deserialize_message(msg_data, get_message(type_map[topic]))
                 depth_image = bridge.imgmsg_to_cv2(depth_msg, desired_encoding='passthrough')
-                timestamp = f"{depth_msg.header.stamp.sec}_{depth_msg.header.stamp.nanosec}"
-                depth_filename = os.path.join(images_dir, f"depth_{timestamp}.png")
-                cv2.imwrite(depth_filename, depth_image)
+                timestamp_str = f"{depth_msg.header.stamp.sec}_{depth_msg.header.stamp.nanosec}"
+                depth_image_filename = os.path.join(depth_images_dir, f"depth_{timestamp_str}.png")
+                cv2.imwrite(depth_image_filename, depth_image)
 
             # Process command velocities
             elif topic == '/cmd_vel_stamped':
@@ -97,38 +107,64 @@ def extract_rosbag(bag_files, output_dir):
                 nanosec = command_msg.header.stamp.nanosec
                 timestamp_str = f"{sec}_{nanosec}"
 
-                # Construct an image filename (if applicable)
-                image_filename = f"color_{timestamp_str}.jpg"
-                
+                # Match image filenames for commands
+                color_image_filename = os.path.join(color_images_dir, f"color_{timestamp_str}.jpg")
+                depth_image_filename = os.path.join(depth_images_dir, f"depth_{timestamp_str}.png")
+
                 # Save the command to the CSV
-                csv_writer.writerow([image_filename, linear_x, angular_z])
+                csv_writer.writerow([color_image_filename, depth_image_filename, linear_x, angular_z])
 
             # Process laser scan data
             elif topic == '/scan':
                 scan_msg = deserialize_message(msg_data, get_message(type_map[topic]))
-                scan_filename = os.path.join(output_dir, f"scan_{scan_msg.header.stamp.sec}_{scan_msg.header.stamp.nanosec}.yaml")
+                scan_filename = os.path.join(scan_dir, f"scan_{scan_msg.header.stamp.sec}_{scan_msg.header.stamp.nanosec}.yaml")
                 with open(scan_filename, 'w') as scan_file:
                     yaml.dump({
                         'ranges': list(scan_msg.ranges),
                         'intensities': list(scan_msg.intensities)
                     }, scan_file)
 
-            # Process metadata topics (if needed)
-            elif topic in ['/camera/color/metadata', '/camera/depth/metadata']:
-                metadata_msg = deserialize_message(msg_data, get_message(type_map[topic]))
-                metadata_filename = os.path.join(output_dir, f"{topic.split('/')[-1]}_{metadata_msg.header.stamp.sec}.yaml")
-                with open(metadata_filename, 'w') as metadata_file:
-                    yaml.dump({'data': str(metadata_msg)}, metadata_file)
+            # # Process camera info (color and depth)
+            # elif topic == '/camera/color/camera_info':
+            #     camera_info_msg = deserialize_message(msg_data, get_message(type_map[topic]))
+            #     camera_info_filename = os.path.join(output_dir, f"color_camera_info.yaml")
+            #     with open(camera_info_filename, 'w') as camera_info_file:
+            #         yaml.dump({
+            #             'width': camera_info_msg.width,
+            #             'height': camera_info_msg.height,
+            #             'K': list(camera_info_msg.K),
+            #             'D': list(camera_info_msg.D),
+            #             'distortion_model': camera_info_msg.distortion_model,
+            #         }, camera_info_file)
 
-            # Extrinsics (if needed)
-            elif topic == '/camera/extrinsics/depth_to_color':
-                extrinsics_msg = deserialize_message(msg_data, get_message(type_map[topic]))
-                extrinsics_filename = os.path.join(output_dir, 'extrinsics.yaml')
-                with open(extrinsics_filename, 'w') as extrinsics_file:
-                    yaml.dump({
-                        'rotation': extrinsics_msg.rotation,
-                        'translation': extrinsics_msg.translation
-                    }, extrinsics_file)
+            # elif topic == '/camera/depth/camera_info':
+            #     camera_info_msg = deserialize_message(msg_data, get_message(type_map[topic]))
+            #     camera_info_filename = os.path.join(output_dir, f"depth_camera_info.yaml")
+            #     with open(camera_info_filename, 'w') as camera_info_file:
+            #         yaml.dump({
+            #             'width': camera_info_msg.width,
+            #             'height': camera_info_msg.height,
+            #             'K': list(camera_info_msg.K),
+            #             'D': list(camera_info_msg.D),
+            #             'distortion_model': camera_info_msg.distortion_model,
+            #         }, camera_info_file)
+
+            # # Process metadata topics (if needed)
+            # elif topic in ['/camera/color/metadata', '/camera/depth/metadata']:
+            #     metadata_msg = deserialize_message(msg_data, get_message(type_map[topic]))
+            #     metadata_filename = os.path.join(output_dir, f"{topic.split('/')[-1]}_{metadata_msg.header.stamp.sec}.yaml")
+            #     with open(metadata_filename, 'w') as metadata_file:
+            #         yaml.dump({'data': str(metadata_msg)}, metadata_file)
+
+            # # Extrinsics (if needed)
+            # elif topic == '/camera/extrinsics/depth_to_color':
+            #     extrinsics_msg = deserialize_message(msg_data, get_message(type_map[topic]))
+            #     extrinsics_filename = os.path.join(output_dir, 'extrinsics.yaml')
+            #     with open(extrinsics_filename, 'w') as extrinsics_file:
+            #         yaml.dump({
+            #             'rotation': extrinsics_msg.rotation,
+            #             'translation': extrinsics_msg.translation
+            #         }, extrinsics_file)
 
     csv_file.close()
 
