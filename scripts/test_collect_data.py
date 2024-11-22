@@ -107,13 +107,20 @@ try:
 
         # Get the LiDAR data
         lidar_data = np.array(lidar_node.lidar_data)
-        print(len(lidar_data))
-        lidar_data = np.pad(lidar_data, (0, 160 * 120 - len(lidar_data)), constant_values=25)
+
+        # Replace 'inf' values with NaN (max range of A3 LiDAR)
+        lidar_data[np.isinf(lidar_data)] = np.nan
         
+        # Pad the LiDAR data after the first 1800 points with NaN
+        target_size = 160 * 120  # 19,200 points for 120x160 image resolution
+        if len(lidar_data) < target_size:
+            # Pad with NaN values after the first 1800 valid points
+            lidar_data = np.pad(lidar_data, (0, target_size - len(lidar_data)), constant_values=np.nan)
+        else:
+            # Truncate if more than 19,200 points
+            lidar_data = lidar_data[:target_size]
 
-        # Replace 'inf' values with 25 meters (max range of A3 LiDAR)
-        lidar_data[np.isinf(lidar_data)] = 25.0
-
+        # Reshape LiDAR data to fit 120x160 grid
         lidar_image = lidar_data.reshape(120, 160)
 
         # Display the RGB image for visualization
