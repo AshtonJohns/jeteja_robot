@@ -1,14 +1,24 @@
 
 camera_name: "realsense_d455"
+rgb_camera.profile: "1920x1080x30"
 enable_color: true
-enable_depth: true
-gyro_fps: 150  # Explicitly set FPS
-accel_fps: 150  # Explicitly set FPS
-color_width: 640
-color_height: 480
-color_fps: 30
-depth_width: 640
-depth_height: 480
-depth_fps: 30
-align_depth: true
-enable_pointcloud: true
+enable_depth: false
+enable_infra: false
+enable_accel: false
+enable_gyro: false
+enable_infra1: false
+enable_infra2: false
+enable_rgbd: false
+enable_sync: false
+
+# gyro_fps: 150  
+# accel_fps: 150 
+# color_width: 640
+# color_height: 360
+# color_fps: 60
+# depth_width: 640
+# depth_height: 480
+# depth_fps: 30
+# align_depth: true
+# enable_pointcloud: true
+rgb_camera.power_line_frequency: 2
