@@ -48,33 +48,32 @@ class BearCartDataset(Dataset):
         return len(self.img_labels)
 
     def __getitem__(self, idx):
-        # Load RGB image
+        # Load RGB image from column 0 in labels.csv
         img_name = self.img_labels.iloc[idx, 0]  # Image name from the labels.csv
         img_path = os.path.join(self.img_dir, img_name)
         image = cv.imread(img_path, cv.IMREAD_COLOR)
         if image is None:
             raise FileNotFoundError(f"Error: Could not read RGB image at {img_path}")
-        image = cv.resize(image, (160, 120))  # Ensure consistent resolution (120, 160)
+        image = cv.resize(image, (160, 120))  # Ensure consistent resolution for RGB image (120, 160)
 
-        # Load LiDAR data
+        # Load LiDAR data from column 3 in labels.csv
         lidar_name = self.img_labels.iloc[idx, 3]  # LiDAR filename from the labels.csv
         lidar_path = os.path.join(self.lidar_dir, lidar_name)
         if not os.path.exists(lidar_path):
             raise FileNotFoundError(f"Error: LiDAR file {lidar_path} not found.")
-        
-        lidar_data = np.load(lidar_path)  # Load LiDAR .npy file
-        
-        # If LiDAR data is 1D (e.g., a 360-degree scan), reshape it to fit the 120x160 grid
-        if lidar_data.ndim == 1:
-            # Optionally, resize or interpolate LiDAR data to match the image dimensions
-            lidar_data = np.resize(lidar_data, (120, 160))  # Reshape to the required resolution
 
-        # Downsample the LiDAR data to 1800 points (30x60 grid)
-        lidar_data = downsample_lidar(lidar_data)  # Downsampling to 1800 points
+        lidar_data = np.load(lidar_path)  # Load LiDAR .npy file
+
+        # If LiDAR data is 1D (e.g., a 360-degree scan), resize it to fit the 30x60 grid
+        if lidar_data.ndim == 1:
+            lidar_data = np.resize(lidar_data, (30, 60))  # Resize to the required resolution (30, 60)
+
+        # Replace NaN values with zeros
+        lidar_data = np.nan_to_num(lidar_data, nan=0.0)
 
         # Convert images and LiDAR data to tensor format
-        image_tensor = self.transform(image)
-        lidar_tensor = torch.tensor(lidar_data, dtype=torch.float32).unsqueeze(0)  # Add a channel dimension for LiDAR
+        image_tensor = self.transform(image)  # RGB image tensor
+        lidar_tensor = torch.tensor(lidar_data, dtype=torch.float32).unsqueeze(0)  # LiDAR tensor (add channel dimension)
 
         # Combine RGB and LiDAR into a single tensor (4 channels)
         combined_tensor = torch.cat((image_tensor, lidar_tensor), dim=0)
@@ -82,7 +81,8 @@ class BearCartDataset(Dataset):
         # Steering and throttle values
         steering = self.img_labels.iloc[idx, 1].astype(np.float32)
         throttle = self.img_labels.iloc[idx, 2].astype(np.float32)
-        return combined_tensor.float(), steering, throttle
+    
+        return combined_tensor.float(), steering, throttle  # Return combined tensor, steering, and throttle without mask
 
 
 def train(dataloader, model, loss_fn, optimizer):
@@ -165,7 +165,7 @@ plt.plot(range(epochs), test_losses, 'orange', label='Test')
 plt.xlabel('Epoch')
 plt.ylabel('MSE Loss')
 plt.ylim(0.0, 0.1)
-plt.yticks(np.arange(0, 0.15, 0.01))  # Set y-axis ticks from 0 to 0.1 in steps of 0.01
+plt.yticks(np.arange(0, 0.10, 0.01))  # Set y-axis ticks from 0 to 0.1 in steps of 0.01
 plt.grid(True)
 plt.legend()
 plt.title(pilot_title)
