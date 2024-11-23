@@ -155,7 +155,7 @@ def main():
 
     # Path to the topics configuration file
     config_path = os.path.join(
-        get_package_share_directory('data_processing'),
+        get_package_share_directory('jeteja_record'),
         'config',
         'topics.yaml'
     )
