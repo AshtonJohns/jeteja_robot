@@ -15,7 +15,6 @@ setup(
     install_requires=[
         'setuptools',         # Core dependency for ROS 2 packages
         'opencv-python',       # Required for OpenCV functions (cv2)
-        'argparse'             # Argument parsing library
     ],
     zip_safe=True,
     maintainer='ajay',
@@ -25,8 +24,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'extract_bags = data_processing.extract_bags:main', 
-            'rosbag_manager = data_processing.rosbag_manager:main', 
+            'rosbag_manager = data_processing.rosbag_manager:main',
         ],
     },
 )
