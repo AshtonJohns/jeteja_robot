@@ -171,11 +171,13 @@ cython_debug/
 *.FCBak
 
 # Data directory
-*models/
+# Ignore only contents of these directories, not other files
 data/rosbags/*
 data/rosbags_extracted/*
 data/processed_data/*
-!preprocessing/extract_bags.py
+
+# Explicitly allow preprocessing directory
+!preprocessing/
 
 # Database files
 *.db3
