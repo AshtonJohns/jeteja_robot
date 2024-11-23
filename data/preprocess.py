@@ -1,5 +1,6 @@
+
+import glob
 import os
-import shutil
 import cv2
 import numpy as np
 import pandas as pd
@@ -56,10 +57,48 @@ def validate_and_preprocess(output_dir, **kwargs):
         
     print("Preprocessing completed successfully.")
 
+def find_image(image_name, search_dir):
+    """
+    Search for an image file in a directory, matching up to the second underscore,
+    without including the file extension in the pattern.
+
+    :param image_name: The original file name to find (from the CSV).
+    :param search_dir: The directory to search for the file.
+    :return: The first matched file name (with its actual extension), or None if no valid match is found.
+    """
+    if not search_dir or not image_name:
+        return None
+
+    base_name, _ = os.path.splitext(image_name)  # Ignore the extension
+    parts = base_name.split('_')
+
+    # Ensure the file name has at least two underscore-separated parts
+    if len(parts) < 3:
+        return None
+
+    # Extract the prefix (up to the second underscore)
+    prefix = '_'.join(parts[:2])
+    nanoseconds = parts[2]
+
+    # Start with the full nanoseconds and truncate step-by-step
+    for i in range(len(nanoseconds), 0, -1):
+        pattern = os.path.join(search_dir, f"{prefix}_{nanoseconds[:i]}*")  # Match any extension
+        print(f"Searching with pattern: {pattern}")  # Debug output
+        matches = glob.glob(pattern)
+        if matches:
+            print(f"Match found: {matches[0]}")  # Debug output
+            return os.path.basename(matches[0])  # Return the full matched file name with its actual extension
+
+    # If the final pattern ends with `_`, it's invalid
+    if len(nanoseconds) == 0 or f"{prefix}_" in pattern:
+        print(f"No valid match for {image_name}. Removing row.")
+        return None
+
+    return None  # No match found
 
 def process_commands(commands_path, output_dir, **kwargs):
     """
-    Processes the commands.csv file to update paths for color and depth images.
+    Processes the commands.csv file to find existing image files or remove rows with missing images.
 
     :param commands_path: Path to the commands.csv file
     :param output_dir: Output directory for preprocessed data
@@ -73,20 +112,22 @@ def process_commands(commands_path, output_dir, **kwargs):
     # Load the CSV file into a DataFrame
     commands_df = pd.read_csv(commands_path)
 
-    # Update the paths in the relevant columns
-    if color_dir:
-        print("Processing color image filenames...")
-        if 'color_image_filename' in commands_df.columns:
-            commands_df['color_image_filename'] = commands_df['color_image_filename'].apply(
-                lambda x: os.path.join(color_dir, os.path.splitext(x)[0] + '.npy') if pd.notnull(x) else x
-            )
+    # Process color image filenames
+    if color_dir and 'color_image_filename' in commands_df.columns:
+        print("Validating color image filenames...")
+        commands_df['color_image_filename'] = commands_df['color_image_filename'].apply(
+            lambda x: find_image(x, color_dir) if pd.notnull(x) else None
+        )
 
-    if depth_dir:
-        print("Processing depth image filenames...")
-        if 'depth_image_filename' in commands_df.columns:
-            commands_df['depth_image_filename'] = commands_df['depth_image_filename'].apply(
-                lambda x: os.path.join(depth_dir, os.path.splitext(x)[0] + '.npy') if pd.notnull(x) else x
-            )
+    # Process depth image filenames
+    if depth_dir and 'depth_image_filename' in commands_df.columns:
+        print("Validating depth image filenames...")
+        commands_df['depth_image_filename'] = commands_df['depth_image_filename'].apply(
+            lambda x: find_image(x, depth_dir) if pd.notnull(x) else None
+        )
+
+    # Remove rows where either color or depth image is missing
+    commands_df.dropna(subset=['color_image_filename', 'depth_image_filename'], inplace=True)
 
     # Save the updated DataFrame back to a CSV
     processed_commands_path = os.path.join(output_dir, "commands.csv")
@@ -139,7 +180,6 @@ def process_images(input_dir, output_dir, expected_shape, is_depth):
         np.save(output_path.replace('.png', '.npy').replace('.jpg', '.npy'), image)
         print(f"Processed and saved: {output_path.replace('.png', '.npy').replace('.jpg', '.npy')}")
 
-
 def main():
 
     # Set directories for preprocessing
@@ -162,7 +202,6 @@ def main():
                             depth_dir=depth_image_dir,
                             scan_dir = scan_dir,
                             commands_path = commands_path)
-
 
 if __name__ == '__main__':
     main()
