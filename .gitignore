@@ -175,6 +175,7 @@ cython_debug/
 data/rosbags/*
 data/rosbags_extracted/*
 data/processed_data/*
+!preprocessing/extract_bags.py
 
 # Database files
 *.db3
