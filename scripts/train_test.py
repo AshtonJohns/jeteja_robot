@@ -22,6 +22,18 @@ else:
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using {DEVICE} device")
 
+def downsample_lidar(lidar_data, new_width=60, new_height=30):
+    old_height, old_width = lidar_data.shape
+    factor_y = old_height // new_height
+    factor_x = old_width // new_width
+    downsampled_data = np.zeros((new_height, new_width))
+    
+    for i in range(new_height):
+        for j in range(new_width):
+            downsampled_data[i, j] = np.mean(lidar_data[i*factor_y:(i+1)*factor_y, j*factor_x:(j+1)*factor_x])
+    
+    return downsampled_data
+
 class BearCartDataset(Dataset):
     """
     Customized dataset for RGB and LiDAR combined data
@@ -57,10 +69,8 @@ class BearCartDataset(Dataset):
             # Optionally, resize or interpolate LiDAR data to match the image dimensions
             lidar_data = np.resize(lidar_data, (120, 160))  # Reshape to the required resolution
 
-        # Replace 'inf' values with NaN and create a mask for valid data
-        lidar_data = np.where(np.isinf(lidar_data), np.nan, lidar_data)  # Replace inf with NaN
-        mask = np.isnan(lidar_data)  # Mask where NaNs are present
-        mask = ~mask  # Invert mask so valid data points are 1, NaNs are 0
+        # Downsample the LiDAR data to 1800 points (30x60 grid)
+        lidar_data = downsample_lidar(lidar_data)  # Downsampling to 1800 points
 
         # Convert images and LiDAR data to tensor format
         image_tensor = self.transform(image)
@@ -72,18 +82,18 @@ class BearCartDataset(Dataset):
         # Steering and throttle values
         steering = self.img_labels.iloc[idx, 1].astype(np.float32)
         throttle = self.img_labels.iloc[idx, 2].astype(np.float32)
-        return combined_tensor.float(), steering, throttle, mask  # Return mask to handle NaNs during training
+        return combined_tensor.float(), steering, throttle
 
 
 def train(dataloader, model, loss_fn, optimizer):
     model.train()
     num_used_samples = 0
     ep_loss = 0.
-    for b, (im, st, th, mask) in enumerate(dataloader):
+    for b, (im, st, th) in enumerate(dataloader):
         target = torch.stack((st, th), dim=-1)
-        feature, target, mask = im.to(DEVICE), target.to(DEVICE), mask.to(DEVICE)
+        feature, target = im.to(DEVICE), target.to(DEVICE)
         pred = model(feature)
-        batch_loss = loss_fn(pred, target, mask)  # Pass mask to loss function
+        batch_loss = loss_fn(pred, target)  # Loss function without mask
         optimizer.zero_grad()  # zero previous gradient
         batch_loss.backward()  # back propagation
         optimizer.step()  # update params
@@ -97,20 +107,18 @@ def test(dataloader, model, loss_fn):
     model.eval()
     ep_loss = 0.
     with torch.no_grad():
-        for b, (im, st, th, mask) in enumerate(dataloader):
+        for b, (im, st, th) in enumerate(dataloader):
             target = torch.stack((st, th), dim=-1)
-            feature, target, mask = im.to(DEVICE), target.to(DEVICE), mask.to(DEVICE)
+            feature, target = im.to(DEVICE), target.to(DEVICE)
             pred = model(feature)
-            batch_loss = loss_fn(pred, target, mask)  # Pass mask to loss function
+            batch_loss = loss_fn(pred, target)  # Loss function without mask
             ep_loss = (ep_loss * b + batch_loss.item()) / (b + 1)
     return ep_loss
 
 
-# Custom loss function to handle NaNs (skipping NaN padded regions)
-def masked_loss(output, target, mask):
-    valid_output = output * mask
-    valid_target = target * mask
-    loss = ((valid_output - valid_target) ** 2).mean()  # MSE loss
+# Custom loss function (standard MSE without NaN masking)
+def standard_loss(output, target):
+    loss = ((output - target) ** 2).mean()  # Mean Squared Error loss
     return loss
 
 
@@ -136,7 +144,7 @@ model = convnets.DonkeyNet().to(DEVICE)  # Adjust input channels to 4 (RGB + LiD
 # Hyper-parameters
 lr = 0.001
 optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0.0001)
-loss_fn = masked_loss  # Use masked loss to ignore NaNs
+loss_fn = standard_loss  # Use standard loss function (no masking)
 epochs = 15
 train_losses = []
 test_losses = []
