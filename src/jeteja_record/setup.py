@@ -10,11 +10,14 @@ setup(
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', ['launch/collect_data_launch.py']),
-        ('share/' + package_name + '/config', ['config/topics.yaml'])
+        ('share/' + package_name + '/config', ['config/topics.yaml']), 
     ],
     install_requires=[
-        'setuptools',         # Core dependency for ROS 2 packages
-        'opencv-python',       # Required for OpenCV functions (cv2)
+        'setuptools',         
+        'opencv-python',       
+        'launch', 
+        'launch_ros', 
+        'rclpy'
     ],
     zip_safe=True,
     maintainer='ajay',
