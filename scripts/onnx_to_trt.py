@@ -4,8 +4,8 @@ import pycuda.autoinit
 import os
 
 # Path to your ONNX model
-onnx_model_path = "/home/ucajetson/UCAJetson/data/2024-11-12-15-12/DonkeyNet-15epochs-0.001lr.onnx"  # Replace with your ONNX file path
-trt_engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_2024-11-12-15-12.trt"  # The output TensorRT engine file
+onnx_model_path = "/home/ucajetson/UCAJetson/data/2024-11-22-12-46/DonkeyNet-15epochs-0.001lr.onnx"  # Replace with your ONNX file path
+trt_engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_2024-11-22-12-46.trt"  # The output TensorRT engine file
 
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 

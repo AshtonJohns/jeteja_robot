@@ -71,7 +71,7 @@ is_paused = True
 
 # Load TensorRT engine
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
-engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_JetsonTest4.trt"  # Path to the TensorRT model
+engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_2024-11-22-12-46.trt"  # Path to the TensorRT model
 
 with open(engine_path, "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
     engine = runtime.deserialize_cuda_engine(f.read())
@@ -124,8 +124,8 @@ fps = 0
 try:
     while True:
         rclpy.spin_once(lidar_node)  # Update LiDAR data
-        ret, color_image, depth_image = get_realsense_frame(cam)  # Capture RGB and depth frames
-        if not ret or color_image is None or depth_image is None:
+        ret, color_image = get_realsense_frame(cam)  # Capture RGB frame (no depth)
+        if not ret or color_image is None:
             print("No frame received. TERMINATE!")
             break
 
@@ -141,18 +141,13 @@ try:
         color_image_resized = cv.resize(color_image, (160, 120))
         color_image_normalized = color_image_resized.astype(np.float32) / 255.0
 
-        # Resize, normalize, and add a channel dimension for depth image
-        depth_image_resized = cv.resize(depth_image, (160, 120))
-        depth_image_normalized = cv.normalize(depth_image_resized, None, 0, 1, cv.NORM_MINMAX).astype(np.float32)
-        depth_image_expanded = np.expand_dims(depth_image_normalized, axis=2)
-
         # Reshape and normalize LiDAR data
-        lidar_image = lidar_node.lidar_ranges.reshape((360, 1))  # Assuming a 360° LiDAR with 1D input
-        lidar_image_normalized = cv.resize(lidar_image, (160, 120)).astype(np.float32) / 25.0
+        lidar_image = lidar_node.lidar_ranges.reshape((30, 60))  # Reshape to 30x60 for 1800 points
+        lidar_image_resized = cv.resize(lidar_image, (160, 120)).astype(np.float32) / 25.0
 
-        # Stack RGB, depth, and LiDAR to create a 5-channel input
-        combined_image = np.concatenate((color_image_normalized, depth_image_expanded, np.expand_dims(lidar_image_normalized, axis=2)), axis=2)
-        img_tensor = combined_image.transpose(2, 0, 1)  # Shape (5, 120, 160)
+        # Stack RGB and LiDAR to create a 4-channel input
+        combined_image = np.concatenate((color_image_normalized, np.expand_dims(lidar_image_resized, axis=2)), axis=2)
+        img_tensor = combined_image.transpose(2, 0, 1)  # Shape (4, 120, 160)
 
         # Copy img_tensor to TensorRT input buffer
         np.copyto(inputs[0][0], img_tensor.ravel())

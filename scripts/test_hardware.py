@@ -17,12 +17,13 @@ with open(config_path, "r") as config_file:
 
 def setup_realsense_camera():
     """
-    Configure RealSense camera pipeline for RGB stream (no depth stream).
+    Configure RealSense camera pipeline for RGB stream at 424x240 resolution.
     """
     pipeline = rs.pipeline()
     config = rs.config()
-    config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 60)  # RGB stream
+    config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 60)  # RGB stream at 424x240 resolution
     pipeline.start(config)
+    
     return pipeline
 
 
@@ -39,7 +40,7 @@ def get_realsense_frame(pipeline):
 
     color_image = np.asanyarray(color_frame.get_data())
 
-    # Resize to target resolution (120x160)
+    # Resize to target resolution (160x120) - matching your test_collect_data setup
     color_image_resized = cv.resize(color_image, (160, 120))
 
     return True, color_image_resized
