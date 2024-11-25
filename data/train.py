@@ -1,140 +1,158 @@
 import os
 import pandas as pd
-import numpy as np
+import tensorflow as tf
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
 from tensorflow.keras import layers, models, Input
 from tensorflow.keras.models import Model
+from tensorflow.keras import mixed_precision
 from utils.file_utilities import get_latest_directory
 
+# Enable memory growth
+physical_gpus = tf.config.list_physical_devices('GPU')
+if physical_gpus:
+    try:
+        for gpu in physical_gpus:
+            tf.config.set_logical_device_configuration(
+                gpu,
+                [tf.config.LogicalDeviceConfiguration(memory_limit=6144)]
+            )
+    except RuntimeError as e:
+        print(e)
+else:
+    print("No GPUs detected!")
+
+# Enable mixed-precision training
+policy = mixed_precision.Policy('mixed_float16')
+mixed_precision.set_global_policy(policy)
+
 # Paths
-processed_data_dir = os.path.join('.', 'data', 'processed_data')
+processed_data_dir = os.path.join('data', 'processed_data')
 latest_processed_data = get_latest_directory(processed_data_dir)
 
 DATA_DIR = latest_processed_data
-COLOR_DIR = os.path.join(DATA_DIR, "color_images")
-DEPTH_DIR = os.path.join(DATA_DIR, "depth_images")
-COMMANDS_CSV = os.path.join(DATA_DIR, "commands.csv")
-MODEL_DIR = os.path.join('.', 'data', 'models')
+MODEL_DIR = os.path.join('data', 'models', os.path.basename(DATA_DIR))
+os.makedirs(MODEL_DIR, exist_ok=True)
 
-# Load commands.csv
-commands_df = pd.read_csv(COMMANDS_CSV)
+# TFRecord file paths
+train_tfrecord = os.path.join(DATA_DIR, "train.tfrecord")
+val_tfrecord = os.path.join(DATA_DIR, "val.tfrecord")
+assert os.path.exists(train_tfrecord), f"Train TFRecord not found: {train_tfrecord}"
+assert os.path.exists(val_tfrecord), f"Validation TFRecord not found: {val_tfrecord}"
 
-# Split dataset into training and validation
-train_df, val_df = train_test_split(commands_df, test_size=0.2, random_state=42)
+# Parse TFRecord
+def parse_tfrecord(example_proto):
+    feature_description = {
+        'color_image': tf.io.FixedLenFeature([], tf.string),
+        'depth_image': tf.io.FixedLenFeature([], tf.string),
+        'linear_x': tf.io.FixedLenFeature([], tf.float32),
+        'angular_z': tf.io.FixedLenFeature([], tf.float32),
+    }
+    parsed_features = tf.io.parse_single_example(example_proto, feature_description)
 
-# Helper to load and preprocess images
-def load_image(image_path, is_depth=False):
-    if not os.path.exists(image_path):
-        print(f"Error: File not found - {image_path}")
-        print(f"Current working directory: {os.getcwd()}")
-        return None
-    else:
-        print(f"File {image_path} found.")
+    # Decode images from serialized bytes
+    color_image = tf.io.decode_raw(parsed_features['color_image'], tf.float32)
+    depth_image = tf.io.decode_raw(parsed_features['depth_image'], tf.float32)
 
-    # Load preprocessed .npy file
-    image = np.load(image_path)
-    return image
+    # Reshape images (consistent with preprocessing)
+    color_image = tf.reshape(color_image, (360, 640, 3))
+    depth_image = tf.reshape(depth_image, (360, 640, 1))
 
-# Data generator for training/validation
-def data_generator(data_frame, batch_size):
-    while True:
-        for i in range(0, len(data_frame), batch_size):
-            batch_data = data_frame.iloc[i:i + batch_size]
+    return ({"color_input": color_image, "depth_input": depth_image},
+            {"linear_x": parsed_features['linear_x'], "angular_z": parsed_features['angular_z']})
 
-            # Initialize batches
-            color_images = []
-            depth_images = []
-            linear_x = []
-            angular_z = []
+# Prepare datasets
+def prepare_dataset(tfrecord_path, batch_size, shuffle=True):
+    raw_dataset = tf.data.TFRecordDataset(tfrecord_path)
+    parsed_dataset = raw_dataset.map(parse_tfrecord)
 
-            for _, row in batch_data.iterrows():
-                # Use full paths directly from the CSV
-                color_image_path = os.path.join(COLOR_DIR, row['color_image_filename'])
-                depth_image_path = os.path.join(DEPTH_DIR, row['depth_image_filename'])
+    if shuffle:
+        parsed_dataset = parsed_dataset.shuffle(buffer_size=1000)
 
-                # Load images
-                color_image = load_image(color_image_path)
-                depth_image = load_image(depth_image_path, is_depth=True)
-
-                # Skip invalid rows
-                if color_image is None or depth_image is None:
-                    print(f"Skipping invalid row: {row}")
-                    continue
-
-                color_images.append(color_image)
-                depth_images.append(depth_image)
-                linear_x.append(row['linear_x'])
-                angular_z.append(row['angular_z'])
-
-            # Yield only if there are valid samples
-            if len(color_images) > 0 and len(depth_images) > 0:
-                yield ([np.array(color_images), np.array(depth_images)],
-                       [np.array(linear_x), np.array(angular_z)])
-            else:
-                print("No valid data in batch, skipping...")
+    return parsed_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
 # Create the model
 def create_model():
-    # Input for Color Images
-    # color_input = Input(shape=(360, 640, 3), name='color_input') # NOTE possible OOM errors
-    color_input = Input(shape=(180, 320, 3), name='color_input')
-    color_features = layers.Conv2D(32, (3, 3), activation='relu')(color_input)
+    # Color input and features
+    color_input = Input(shape=(360, 640, 3), name='color_input')
+    color_features = layers.Conv2D(64, (3, 3), activation='relu')(color_input)
+    color_features = layers.MaxPooling2D((2, 2))(color_features)
+    color_features = layers.Conv2D(128, (3, 3), activation='relu')(color_features)
     color_features = layers.MaxPooling2D((2, 2))(color_features)
     color_features = layers.GlobalAveragePooling2D()(color_features)
-    # color_features = layers.Flatten()(color_features) # Old
+    color_features = layers.Dense(512, activation='relu')(color_features)
 
-    # Input for Depth Images
-    # depth_input = Input(shape=(360, 640, 1), name='depth_input') # same as above
-    depth_input = Input(shape=(180, 320, 1), name='depth_input')
-    depth_features = layers.Conv2D(32, (3, 3), activation='relu')(depth_input)
+    # Depth input and features
+    depth_input = Input(shape=(360, 640, 1), name='depth_input')
+    depth_features = layers.Conv2D(64, (3, 3), activation='relu')(depth_input)
+    depth_features = layers.MaxPooling2D((2, 2))(depth_features)
+    depth_features = layers.Conv2D(128, (3, 3), activation='relu')(depth_features)
     depth_features = layers.MaxPooling2D((2, 2))(depth_features)
     depth_features = layers.GlobalAveragePooling2D()(depth_features)
-    # depth_features = layers.Flatten()(depth_features) # Old
+    depth_features = layers.Dense(512, activation='relu')(depth_features)
 
-    # Combine Features
+    # Combine features
     combined = layers.Concatenate()([color_features, depth_features])
-    x = layers.Dense(128, activation='relu')(combined)
-    x = layers.Dense(64, activation='relu')(x)
+    x = layers.Dense(256, activation='relu')(combined)
+    x = layers.Dense(128, activation='relu')(x)
 
     # Outputs
     linear_output = layers.Dense(1, name='linear_x')(x)
     angular_output = layers.Dense(1, name='angular_z')(x)
 
-    # Compile the model
+    # Compile model
     model = Model(inputs=[color_input, depth_input], outputs=[linear_output, angular_output])
-    model.compile(optimizer='adam', loss='mse')
+    optimizer = tf.keras.optimizers.Adam()
+    model.compile(optimizer=optimizer, loss={'linear_x': 'mse', 'angular_z': 'mse'})
     return model
 
 # Training setup
-batch_size = 32 # Old
-# batch_size = 1
-epochs = 10
-train_generator = data_generator(train_df, batch_size)
+batch_size = 16
+epochs = 15
 
-val_generator = data_generator(val_df, batch_size)
+train_dataset = prepare_dataset(train_tfrecord, batch_size=batch_size, shuffle=True)
+val_dataset = prepare_dataset(val_tfrecord, batch_size=batch_size, shuffle=False)
 
-# Create and train the model
 model = create_model()
 model.summary()
 
+# Callbacks
+callbacks = [
+    tf.keras.callbacks.ModelCheckpoint(
+        filepath=os.path.join(MODEL_DIR, "best_model.keras"),
+        monitor="val_loss",
+        save_best_only=True,
+        verbose=1
+    ),
+    tf.keras.callbacks.CSVLogger(
+        os.path.join(MODEL_DIR, "training_log.csv"),
+        append=True
+    ),
+    tf.keras.callbacks.EarlyStopping(
+        monitor="val_loss",
+        patience=5,
+        verbose=1,
+        restore_best_weights=True
+    ),
+]
+
+# Train the model
 history = model.fit(
-    train_generator,
-    steps_per_epoch=len(train_df) // batch_size,
+    train_dataset,
+    validation_data=val_dataset,
     epochs=epochs,
-    validation_data=val_generator,
-    validation_steps=len(val_df) // batch_size
+    callbacks=callbacks
 )
 
-# Save the model
-model.save(os.path.join(MODEL_DIR, os.path.basename(DATA_DIR),"robot_model.h5"))
-print(f"Model saved to {os.path.join(MODEL_DIR, 'robot_model.h5')}")
+# Save the final model and plot
+model.save(os.path.join(MODEL_DIR, "final_model.keras"))
+
+history_df = pd.DataFrame(history.history)
+history_df.to_csv(os.path.join(MODEL_DIR, "training_history.csv"), index=False)
 
 plt.plot(history.history['loss'], label='Training Loss')
 plt.plot(history.history['val_loss'], label='Validation Loss')
-plt.xlabel('Epochs')
-plt.ylabel('Loss')
 plt.legend()
-plt.show()
-
-
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.title('Training vs Validation Loss')
+plt.savefig(os.path.join(MODEL_DIR, "training_vs_validation.png"))
