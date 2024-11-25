@@ -1,7 +1,7 @@
-tensorflow==2.11
+tensorflow
 numpy
 opencv-python
 pandas
-scikit-learn
 matplotlib
 mpremote
+scikit-learn
