@@ -175,6 +175,7 @@ cython_debug/
 data/rosbags/*
 data/rosbags_extracted/*
 data/processed_data/*
+data/models/*
 
 # Explicitly allow preprocessing directory
 !preprocessing/
