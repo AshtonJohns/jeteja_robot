@@ -1,4 +1,4 @@
-#Data collection with Realsense Camera
+# Data collection with Realsense Camera
 
 import os
 import sys
@@ -121,14 +121,19 @@ try:
         act_st = -ax_val_st
         act_th = -ax_val_th  # throttle action: -1: max forward, 1: max backward
 
-        # Encode steering and throttle values to duty cycle
-        duty_st = STEERING_CENTER - STEERING_RANGE + int(STEERING_RANGE * (act_st + 1))
+        # Refined throttle control with correct forward and reverse mapping
         if act_th > 0:
-            duty_th = THROTTLE_STALL + int(THROTTLE_FWD_RANGE * min(act_th, THROTTLE_LIMIT))
+            # Forward motion with variable speed control
+            duty_th = THROTTLE_STALL + int((THROTTLE_FWD_RANGE - THROTTLE_STALL) * act_th)
         elif act_th < 0:
-            duty_th = THROTTLE_STALL + int(THROTTLE_REV_RANGE * max(act_th, -THROTTLE_LIMIT))
+            # Reverse motion with variable speed control
+            duty_th = THROTTLE_STALL - int((THROTTLE_STALL - THROTTLE_REV_RANGE) * abs(act_th))
         else:
+            # No throttle
             duty_th = THROTTLE_STALL
+
+        # Encode steering values
+        duty_st = STEERING_CENTER - STEERING_RANGE + int(STEERING_RANGE * (act_st + 1))
 
         # Send control signals to the microcontroller
         ser_pico.write((f"{duty_st},{duty_th}\n").encode('utf-8'))
