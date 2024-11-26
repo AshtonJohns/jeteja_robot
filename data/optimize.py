@@ -4,11 +4,15 @@ import numpy as np
 import os
 from utils.file_utilities import get_latest_directory
 
+raise Warning("This is not implemented yet.")
+
 # Paths
 models_dir = os.path.join(".", "data", "models")
-MODEL_DIR = get_latest_directory(models_dir)
-EXPORTED_MODEL_PATH = os.path.join(MODEL_DIR, "2024-11-22_14-11-35 opt")  # Exported model directory
-TENSORRT_MODEL_PATH = os.path.join(MODEL_DIR, "best_model_tensorrt")  # TensorRT-optimized model directory
+latest_model_dir = get_latest_directory(models_dir)
+if "_converted" not in latest_model_dir:
+    raise FileNotFoundError("Only model.exports (not keras) are being used.")
+EXPORTED_MODEL_PATH = latest_model_dir  # Exported model directory
+TENSORRT_MODEL_PATH = latest_model_dir + "_optimized"  # TensorRT-optimized model directory
 
 # Optimize the model using TensorRT
 def optimize_with_tensorrt(saved_model_path, tensorrt_model_path):
