@@ -7,19 +7,15 @@ from utils.file_utilities import get_latest_directory
 
 def convert_to_tflite(saved_model_dir, tflite_file):
     converter = tf.lite.TFLiteConverter.from_saved_model(saved_model_dir)
-    # Enable TensorFlow ops fallback
     converter.target_spec.supported_ops = [
-        tf.lite.OpsSet.TFLITE_BUILTINS,  # TensorFlow Lite ops
-        tf.lite.OpsSet.SELECT_TF_OPS    # TensorFlow Flex ops
+        tf.lite.OpsSet.TFLITE_BUILTINS,  # TensorFlow Lite operations
+        tf.lite.OpsSet.SELECT_TF_OPS     # TensorFlow operations
     ]
-    # Optional: Enable float16 quantization for smaller model size
-    converter.optimizations = [tf.lite.Optimize.DEFAULT]
-    converter.target_spec.supported_types = [tf.float16]
-
     tflite_model = converter.convert()
-    with open(tflite_file, "wb") as f:
+
+    # Save the converted model
+    with open(tflite_file, 'wb') as f:
         f.write(tflite_model)
-    print(f"Converted TFLite model saved at {tflite_file}")
 
 
 # Define the Cast layer
