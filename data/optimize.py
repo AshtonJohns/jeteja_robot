@@ -5,17 +5,18 @@ import os
 from utils.file_utilities import get_latest_directory
 
 # Paths
-models_dir = os.path.join(".","data","models")
+models_dir = os.path.join(".", "data", "models")
 MODEL_DIR = get_latest_directory(models_dir)
-KERAS_MODEL_PATH = os.path.join(MODEL_DIR, "best_model.keras")
-SAVED_MODEL_PATH = os.path.join(MODEL_DIR, "best_model_savedmodel.keras")
-TENSORRT_MODEL_PATH = os.path.join(MODEL_DIR, "best_model_tensorrt")
+H5_MODELS_DIR = os.path.join(MODEL_DIR, "converted_h5")  # Directory for .h5 models
+BEST_H5_MODEL_PATH = os.path.join(H5_MODELS_DIR, "best_model.h5")  # Updated path for .h5
+SAVED_MODEL_PATH = os.path.join(MODEL_DIR, "best_model_savedmodel")  # TensorFlow SavedModel
+TENSORRT_MODEL_PATH = os.path.join(MODEL_DIR, "best_model_tensorrt")  # TensorRT model
 
-# Convert Keras model to TensorFlow SavedModel format
-def convert_to_saved_model(keras_model_path, saved_model_path):
-    print("Converting Keras model to TensorFlow SavedModel...")
-    model = tf.keras.models.load_model(keras_model_path)
-    model.save(saved_model_path)
+# Convert HDF5 model to TensorFlow SavedModel format
+def convert_to_saved_model(h5_model_path, saved_model_path):
+    print("Converting HDF5 model to TensorFlow SavedModel...")
+    model = tf.keras.models.load_model(h5_model_path)  # Load .h5 model
+    tf.saved_model.save(model, saved_model_path)  # Save as SavedModel format
     print(f"SavedModel saved at: {saved_model_path}")
 
 # Optimize the model using TensorRT
@@ -56,8 +57,8 @@ if __name__ == "__main__":
     # Ensure model directories exist
     os.makedirs(MODEL_DIR, exist_ok=True)
 
-    # Step 1: Convert Keras model to TensorFlow SavedModel
-    convert_to_saved_model(KERAS_MODEL_PATH, SAVED_MODEL_PATH)
+    # Step 1: Convert HDF5 model to TensorFlow SavedModel
+    convert_to_saved_model(BEST_H5_MODEL_PATH, SAVED_MODEL_PATH)
 
     # Step 2: Optimize the model with TensorRT
     optimize_with_tensorrt(SAVED_MODEL_PATH, TENSORRT_MODEL_PATH)
