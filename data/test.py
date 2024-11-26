@@ -1,6 +1,6 @@
 import os
 import numpy as np
-import tflite_runtime.interpreter as tflite
+import tensorflow as tf
 from utils.file_utilities import get_latest_directory
 
 # Input preparation (same as above)
@@ -12,10 +12,11 @@ inputs = [color_input, depth_input]
 # Load the TFLite model
 models_dir = os.path.join('.','data','models')
 latest_models_dir = get_latest_directory(models_dir)
+print(latest_models_dir)
 if not latest_models_dir.endswith('_Ready'):
     raise FileNotFoundError("You must have a tflite directory")
 model_path = os.path.join(latest_models_dir,'best_model_optimized.tflite')
-interpreter = tflite.Interpreter(model_path=model_path)
+interpreter = tf.lite.Interpreter(model_path=model_path)
 interpreter.allocate_tensors()
 
 # Get input and output details
