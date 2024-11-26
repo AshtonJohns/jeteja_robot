@@ -25,7 +25,7 @@ print(f"Using {DEVICE} device")
 
 class BearCartDataset(Dataset):
     """
-    Customized dataset for 4-channel RGB-depth combined images
+    Customized dataset for 4-channel RGB-depth combined images and IMU data (accelerometer + gyroscope)
     """
     def __init__(self, annotations_file, img_dir):
         self.img_labels = pd.read_csv(annotations_file)
@@ -45,17 +45,28 @@ class BearCartDataset(Dataset):
         # Steering and throttle values
         steering = self.img_labels.iloc[idx, 1].astype(np.float32)
         throttle = self.img_labels.iloc[idx, 2].astype(np.float32)
-        return image_tensor.float(), steering, throttle
+
+        # IMU data: Accelerometer and Gyroscope values (6 total)
+        accel_x = self.img_labels.iloc[idx, 3].astype(np.float32)
+        accel_y = self.img_labels.iloc[idx, 4].astype(np.float32)
+        accel_z = self.img_labels.iloc[idx, 5].astype(np.float32)
+        gyro_x = self.img_labels.iloc[idx, 6].astype(np.float32)
+        gyro_y = self.img_labels.iloc[idx, 7].astype(np.float32)
+        gyro_z = self.img_labels.iloc[idx, 8].astype(np.float32)
+
+        # Return both image and IMU data
+        imu_data = np.array([accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z])
+        return image_tensor.float(), torch.tensor(imu_data), steering, throttle
 
 
 def train(dataloader, model, loss_fn, optimizer):
     model.train()
     num_used_samples = 0
     ep_loss = 0.
-    for b, (im, st, th) in enumerate(dataloader):
+    for b, (im, imu_data, st, th) in enumerate(dataloader):
         target = torch.stack((st, th), dim=-1)
-        feature, target = im.to(DEVICE), target.to(DEVICE)
-        pred = model(feature)
+        feature, imu_data, target = im.to(DEVICE), imu_data.to(DEVICE), target.to(DEVICE)
+        pred = model(feature, imu_data)  # Pass both image and IMU data to the model
         batch_loss = loss_fn(pred, target)
         optimizer.zero_grad()  # zero previous gradient
         batch_loss.backward()  # back propagation
@@ -70,10 +81,10 @@ def test(dataloader, model, loss_fn):
     model.eval()
     ep_loss = 0.
     with torch.no_grad():
-        for b, (im, st, th) in enumerate(dataloader):
+        for b, (im, imu_data, st, th) in enumerate(dataloader):
             target = torch.stack((st, th), dim=-1)
-            feature, target = im.to(DEVICE), target.to(DEVICE)
-            pred = model(feature)
+            feature, imu_data, target = im.to(DEVICE), imu_data.to(DEVICE), target.to(DEVICE)
+            pred = model(feature, imu_data)  # Pass both image and IMU data to the model
             batch_loss = loss_fn(pred, target)
             ep_loss = (ep_loss * b + batch_loss.item()) / (b + 1)
     return ep_loss
@@ -133,6 +144,7 @@ print("Model weights saved")
 
 # ONNX export
 dummy_input = torch.randn(1, 4, 120, 160).to(DEVICE)  # Adjust shape for 120x160 RGB-depth
+dummy_imu = torch.randn(1, 6).to(DEVICE)  # IMU data (6 values)
 onnx_model_path = os.path.join(data_dir, f'{pilot_title}.onnx')
-torch.onnx.export(model, dummy_input, onnx_model_path, opset_version=11)
+torch.onnx.export(model, (dummy_input, dummy_imu), onnx_model_path, opset_version=11)
 print(f"Model exported to ONNX format at: {onnx_model_path}")
