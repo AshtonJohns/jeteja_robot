@@ -157,6 +157,9 @@ dmypy.json
 # pytype static type analyzer
 .pytype/
 
+# rsync bash
+rsync.bash
+
 # Cython debug symbols
 cython_debug/
 
