@@ -8,64 +8,23 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist, TwistStamped
 from sensor_msgs.msg import Joy
 from ament_index_python.packages import get_package_share_directory
-
-class PicoHandler(object):
-    def __init__(self):
-        pass
-
-    def kill(self):
-        try:
-            self.terminate()
-        except:
-            pass
-
-    def reset(self):
-        self.kill()
-        command = ["python", "-m", "mpremote", "reset"]
-        try:
-            res = subprocess.Popen(command)
-            return 1
-        except:
-            return 0
-            
-    def run(self,path):
-        command = ["python", "-m", "mpremote", "run", path]
-        try:
-            res = subprocess.Popen(command)
-            self.terminate = res.terminate
-            return 1
-        except:
-            return 0
-        
-    def get_pico_port(self):
-        # Run `mpremote connect list` and capture the output
-        result = subprocess.run(['python3', '-m', 'mpremote', 'connect', 'list'], capture_output=True, text=True)
-        output = result.stdout
-
-        # Parse the output to find the serial port (assuming the first line has the required port)
-        lines = output.splitlines()
-        for line in lines:
-            if line.startswith('/dev'):
-                return line.split()[0]  # Extract the port (e.g., /dev/ttyACM0)
-        return 0
+from scripts.pico_handler import PicoConnection
 
 class RemoteControlHandler(Node):
     def __init__(self):
         super().__init__('remote_control_handler')
 
-        # Pico process execution
-        self.pico_execute = PicoHandler()
-
-        # Retrieve or auto-detect serial port
-        self.declare_parameter('serial_port', 'auto')
-        self.set_serial()
-
         # Get main.py path for pico 
-        self.pico_port_script_path = os.path.join(
+        pico_port_script_path = os.path.join(
                 get_package_share_directory('robot_launch'),
                 'scripts',
                 'main.py'
             )
+        pico_port_script_path = "/home/ucajetson/jeteja_robot/src/robot_launch/scripts/main_log.py"
+        
+        # Pico and serial communication process execution
+        self.get_logger().info(pico_port_script_path)
+        self.pico_execute = PicoConnection(pico_port_script_path)
         
         # Declare all parameters with default value 0
         self.declare_parameter('motor_min_duty_cycle', 0)
@@ -87,7 +46,6 @@ class RemoteControlHandler(Node):
         self.steering_max_duty_cycle = self.get_parameter('steering_max_duty_cycle').get_parameter_value().integer_value
 
         # State variables (True == alive, False == dead)
-        self.microcontroller_state = False
         self.recording_state = False
         self.enable_recording_state = False
 
@@ -98,33 +56,10 @@ class RemoteControlHandler(Node):
         # NOTE we don't need the time stamped /cmd_vel for the pico
         self.joy_subscription = self.create_subscription(Joy, '/joy', self.joy_callback, 10)
         self.recording_status_pub = self.create_publisher(String, '/recording_status', 10)
-
-    def set_serial(self):
-        try:
-            self.close_serial()
-            serial_port = self.get_serial_port()
-            self.serial = serial.Serial(serial_port, baudrate=115200, timeout=1)
-            self.get_logger().info(f"Connected to Pico on {serial_port}")
-            return 1
-        except serial.SerialException as e:
-            self.get_logger().error(f"Failed to connect to Pico on {serial_port}: {e}")
-            return 0
         
-    def close_serial(self):
-        try:
-            self.serial.close()
-            return 1
-        except:
-            return 0
-
-    def get_serial_port(self):
-        serial_port = self.get_parameter('serial_port').get_parameter_value().string_value
-        if serial_port == 'auto':
-            return self.pico_execute.get_pico_port()
-        return serial_port
 
     def cmd_vel_callback(self, msg):
-        if self.microcontroller_state:
+        if self.pico_execute.get_state():
             # linear_x = msg.twist.linear.x
             # angular_z = msg.twist.angular.z
             linear_x = msg.linear.x
@@ -147,10 +82,7 @@ class RemoteControlHandler(Node):
 
         if emergency_button == 1:
             self.get_logger().info("Emergency buttoned pressed")
-            res = self.pico_execute.reset()
-            self.close_serial()
-            if res == 1:
-                self.microcontroller_state = False
+            self.pico_execute.close()
         
         elif pause_recording == 1:
             self.handle_pause()
@@ -160,12 +92,8 @@ class RemoteControlHandler(Node):
 
         elif pico_start_button == 1:
             self.get_logger().info("Pico start button pressed")
-            if not self.microcontroller_state:
-                res = self.pico_execute.run(self.pico_port_script_path)
-                if res == 1:
-                    res = self.set_serial()
-                    if res == 1:
-                        self.microcontroller_state = True
+            self.pico_execute.connect()
+            self.get_logger().info("We did it")
 
     def handle_resume(self):
         if not self.enable_recording_state and not self.recording_state:
@@ -212,11 +140,11 @@ class RemoteControlHandler(Node):
 
     def send_duty_cycle_to_pico(self, speed_duty_cycle, steering_duty_cycle):
         command = f"SPEED:{speed_duty_cycle};STEER:{steering_duty_cycle}\n"
-        if self.microcontroller_state:
-            self.serial.write(command.encode('utf-8'))
-            self.get_logger().info(f"Sent: {command}")
-        else:
-            self.get_logger().info(f"Pico is not alive!")
+        if self.pico_execute.get_state():
+            self.pico_execute.write(command)
+            # self.get_logger().info(f"Sent: {command}")
+        # else:
+        #     self.get_logger().info(f"Pico is not alive!")
 
 def main(args=None):
     import traceback

@@ -16,11 +16,11 @@ def generate_launch_description():
         'teleop_twist_joy.yaml'
     )
 
-    # joy_config = join(
-    #     get_package_share_directory('robot_launch'),
-    #     'config',
-    #     'joy.yaml'
-    # )
+    joy_config = join(
+        get_package_share_directory('robot_launch'),
+        'config',
+        'joy.yaml'
+    )
 
     teleop_twist_joy_launch_path = join(
         get_package_share_directory('teleop_twist_joy'),
@@ -53,7 +53,6 @@ def generate_launch_description():
         'rplidar_s2_launch.py'
     )
 
-    # # Define primary nodes that, if they exit, should trigger Pico process shutdown
     # realsense_camera_node = Node(
     #     package='realsense2_camera',
     #     executable='realsense2_camera_node',
@@ -76,11 +75,11 @@ def generate_launch_description():
         description='Path to the teleop_twist_joy configuration file'
     )
 
-    # declare_joy_config_arg = DeclareLaunchArgument(
-    #     'joy_config_filepath',
-    #     default_value=joy_config,
-    #     description='Path to the joy configuration file'
-    # )
+    declare_joy_config_arg = DeclareLaunchArgument(
+        'joy_config_filepath',
+        default_value=joy_config,
+        description='Path to the joy configuration file'
+    )
 
     teleop_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(teleop_twist_joy_launch_path),
@@ -136,6 +135,8 @@ def generate_launch_description():
     """
 
     return LaunchDescription([
+
+        # declare_joy_config_arg,
         
         declare_teleop_config_arg,
 
@@ -151,7 +152,7 @@ def generate_launch_description():
 
         rs_launch,
 
-        rplidar_launch,
+        # rplidar_launch,
 
         LogInfo(msg=controls_info),
 

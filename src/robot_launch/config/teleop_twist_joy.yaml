@@ -12,7 +12,7 @@ teleop_twist_joy_node:
 
     # Angular axis for left/right rotation
     axis_angular:
-      yaw: 3  # Right stick X-axis (adjust based on your joystick mapping)
+      yaw: 2  # Right stick X-axis (adjust based on your joystick mapping)
     scale_angular:
       yaw: 0.6
     scale_angular_turbo:
