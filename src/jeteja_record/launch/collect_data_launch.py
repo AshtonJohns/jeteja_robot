@@ -17,7 +17,7 @@ def generate_launch_description():
 
     # Get the workspace directory from an environment variable or default to the install space
     workspace_dir = os.getenv('ROS_WORKSPACE', os.path.abspath(os.path.join(
-        get_package_share_directory('robot_launch'), '..', '..', '..', '..', # TODO is this a good practice? 
+        get_package_share_directory('jeteja_launch'), '..', '..', '..', '..', # TODO is this a good practice? 
     )))
 
     # Define the output directory

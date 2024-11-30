@@ -1,6 +1,6 @@
 from pico_handler import PicoConnection
 
-pico = PicoConnection('src/robot_launch/scripts/main_log.py')
+pico = PicoConnection('src/jeteja_launch/scripts/main.py')
 
 while True:
 
