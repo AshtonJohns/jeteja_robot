@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>jeteja_launch</name>
+  <name>robot_launch</name>
   <version>0.0.0</version>
   <description>Package for launching and controlling a robot with ROS 2 and a Pico microcontroller.</description>
   <maintainer email="ashtonmjohns@gmail.com">ajay</maintainer>

@@ -44,11 +44,8 @@ class SerialConnectionHandler(object):
 
     def set_serial(self, serial_port, baudrate, timeout):
         self.serial.port = serial_port
-        self.port = serial_port
         self.serial.baudrate = baudrate
-        self.baudrate = baudrate
         self.serial.timeout = timeout
-        self.timeout = timeout
         self.serial.open()
 
     def write(self, command:str):
@@ -76,14 +73,12 @@ class PicoHandler(object):
         
     def get_pico_port(self):
         # Run `mpremote connect list` and capture the output
-        try:
-            result = subprocess.run(['python', '-m','mpremote', 'devs'], capture_output=True, text=True)
-            output = result.stdout
+        result = subprocess.run(['python', '-m','mpremote', 'devs'], capture_output=True, text=True)
+        output = result.stdout
 
-            # Parse the output to find the serial port (assuming the first line has the required port)
-            lines = output.splitlines()
-            for line in lines:
-                if 'MicroPython' in line:
-                    return line.split()[0]  # Extract the port (e.g., /dev/ttyACM0)
-        except:
-            raise serial.PortNotOpenError()
+        # Parse the output to find the serial port (assuming the first line has the required port)
+        lines = output.splitlines()
+        for line in lines:
+            if 'MicroPython' in line:
+                return line.split()[0]  # Extract the port (e.g., /dev/ttyACM0)
+        raise serial.PortNotOpenError
