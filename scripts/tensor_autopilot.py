@@ -1,7 +1,7 @@
 import os
 import sys
 import json
-from hardware import get_realsense_frame, setup_realsense_camera, setup_serial, setup_joystick, encode_dutycylce, encode
+from hardware import get_realsense_frame, setup_realsense_camera, setup_serial, setup_joystick, encode
 import pygame
 import cv2 as cv
 from time import time
@@ -47,7 +47,7 @@ is_paused = True
 
 # Load TensorRT engine
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
-engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_2024-11-12-15-12.trt"  # Path to the TensorRT model
+engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_2024-11-26-19-50.trt"  # Path to the TensorRT model
 
 with open(engine_path, "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
     engine = runtime.deserialize_cuda_engine(f.read())
@@ -139,12 +139,25 @@ try:
         st_trim = max(min(float(pred_st), 0.999), -0.999)
         th_trim = max(min(float(pred_th), 0.999), -0.999)
 
-        # Encode and send commands as usual
-        if not is_paused:
-            msg = encode_dutycylce(st_trim, th_trim, params)
+        # Map predicted throttle value to duty cycle with variable speed control
+        if th_trim > 0:
+            # Forward motion
+            duty_th = THROTTLE_STALL + int((THROTTLE_FWD_RANGE - THROTTLE_STALL) * th_trim)
+        elif th_trim < 0:
+            # Reverse motion
+            duty_th = THROTTLE_STALL - int((THROTTLE_STALL - THROTTLE_REV_RANGE) * abs(th_trim))
         else:
-            duty_st, duty_th = params['steering_center'], params['throttle_stall']
+            # No motion
+            duty_th = THROTTLE_STALL
+
+        # Map predicted steering value to duty cycle
+        duty_st = STEERING_CENTER - STEERING_RANGE + int(STEERING_RANGE * (st_trim + 1))
+
+        # Encode and send commands
+        if not is_paused:
             msg = encode(duty_st, duty_th)
+        else:
+            msg = encode(STEERING_CENTER, THROTTLE_STALL)
 
         ser_pico.write(msg)
 
