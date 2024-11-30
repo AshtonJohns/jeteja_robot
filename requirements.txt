@@ -5,3 +5,4 @@ pandas
 matplotlib
 mpremote
 scikit-learn
+tf2onnx
