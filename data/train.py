@@ -6,6 +6,7 @@ from tensorflow.keras import layers, models, Input
 from tensorflow.keras.models import Model
 from tensorflow.keras import mixed_precision
 from utils.file_utilities import get_latest_directory
+from utils.training_utilities import write_run_trt_optimizer_script, write_savedmodel_to_onnx_script
 
 # Enable memory growth
 physical_gpus = tf.config.list_physical_devices('GPU')
@@ -24,6 +25,12 @@ else:
 # Enable mixed-precision training
 policy = mixed_precision.Policy('mixed_float16')
 mixed_precision.set_global_policy(policy)
+
+# DIMENSIONS
+COLOR_WIDTH = 360
+COLOR_LENGTH = 640
+DEPTH_WIDTH = 360
+DEPTH_LENGTH = 640
 
 # Paths
 processed_data_dir = os.path.join('data', 'processed_data')
@@ -54,8 +61,8 @@ def parse_tfrecord(example_proto):
     depth_image = tf.io.decode_raw(parsed_features['depth_image'], tf.float32)
 
     # Reshape images (consistent with preprocessing)
-    color_image = tf.reshape(color_image, (360, 640, 3))
-    depth_image = tf.reshape(depth_image, (360, 640, 1))
+    color_image = tf.reshape(color_image, (COLOR_WIDTH, COLOR_LENGTH, 3))
+    depth_image = tf.reshape(depth_image, (DEPTH_WIDTH, DEPTH_LENGTH, 1))
 
     return ({"color_input": color_image, "depth_input": depth_image},
             {"linear_x": parsed_features['linear_x'], "angular_z": parsed_features['angular_z']})
@@ -73,7 +80,7 @@ def prepare_dataset(tfrecord_path, batch_size, shuffle=True):
 # Create the model
 def create_model():
     # Color input and features
-    color_input = Input(shape=(360, 640, 3), name='color_input')
+    color_input = Input(shape=(COLOR_WIDTH, COLOR_LENGTH, 3), name='color_input')
     color_features = layers.Conv2D(64, (3, 3), activation='relu')(color_input)
     color_features = layers.MaxPooling2D((2, 2))(color_features)
     color_features = layers.Conv2D(128, (3, 3), activation='relu')(color_features)
@@ -82,7 +89,7 @@ def create_model():
     color_features = layers.Dense(512, activation='relu')(color_features)
 
     # Depth input and features
-    depth_input = Input(shape=(360, 640, 1), name='depth_input')
+    depth_input = Input(shape=(DEPTH_WIDTH, DEPTH_LENGTH, 3), name='depth_input')
     depth_features = layers.Conv2D(64, (3, 3), activation='relu')(depth_input)
     depth_features = layers.MaxPooling2D((2, 2))(depth_features)
     depth_features = layers.Conv2D(128, (3, 3), activation='relu')(depth_features)
@@ -145,6 +152,15 @@ history = model.fit(
 
 # Save the final model and plot
 model.save(os.path.join(MODEL_DIR, "final_model.keras"))
+
+# Export SaveModel for trt
+model.export(os.path.join(MODEL_DIR, "SavedModel"))
+
+# Write bash scripts
+write_savedmodel_to_onnx_script(os.path.join(MODEL_DIR, 'convert_onnx.bash'))
+
+write_run_trt_optimizer_script(COLOR_WIDTH, COLOR_LENGTH, DEPTH_WIDTH, DEPTH_LENGTH,
+                  os.path.join(MODEL_DIR, 'run_trt.bash'))
 
 history_df = pd.DataFrame(history.history)
 history_df.to_csv(os.path.join(MODEL_DIR, "training_history.csv"), index=False)
