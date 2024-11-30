@@ -1,9 +1,0 @@
-remote_control_handler:
-  ros__parameters:
-    motor_min_duty_cycle: 3277 # 5% of 65535
-    motor_neutral_duty_cycle: 4915 # 7.5% of 65535
-    motor_max_duty_cycle: 6553 # 10% of 65535
-
-    steering_min_duty_cycle: 3277 # 5% of 65535
-    steering_neutral_duty_cycle: 4482 # 7% of 65535
-    steering_max_duty_cycle: 6553 # 10% of 65535

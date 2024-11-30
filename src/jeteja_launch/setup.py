@@ -1,18 +1,19 @@
 from setuptools import find_packages, setup
 
-package_name = 'robot_launch'
+package_name = 'jeteja_launch'
 
 setup(
     name=package_name,
     version='0.0.0',
     packages=find_packages(exclude=['test']),
-    py_modules=['scripts.pico_handler'],
+    py_modules=['scripts.pico_handler', 'scripts.lower_control'],
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', ['launch/sensor_launch.py']),
         ('share/' + package_name + '/scripts', ['scripts/main.py']),
         ('share/' + package_name + '/scripts', ['scripts/pico_handler.py']),
+        ('share/' + package_name + '/scripts', ['scripts/lower_control.py']),        
         ('share/' + package_name + '/config', ['config/teleop_twist_joy.yaml']),
         ('share/' + package_name + '/config', ['config/joy.yaml']),
         ('share/' + package_name + '/config', ['config/realsense2_camera.yaml']),
@@ -31,8 +32,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'remote_control_handler = robot_launch.remote_control_handler:main',
-            'cmd_vel_fixed_rate = robot_launch.cmd_vel_fixed_rate:main',
+            'remote_control_handler = jeteja_launch.remote_control_handler:main',
+            'cmd_vel_fixed_rate = jeteja_launch.cmd_vel_fixed_rate:main',
         ],
     },
 )
