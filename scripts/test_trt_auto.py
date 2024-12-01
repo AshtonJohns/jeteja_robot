@@ -9,9 +9,6 @@ import tensorrt as trt
 import pycuda.driver as cuda
 import pycuda.autoinit
 import numpy as np
-import rclpy
-from rclpy.node import Node
-from sensor_msgs.msg import LaserScan
 
 # Adds dummy to run Pygame without a display
 os.environ["SDL_VIDEODRIVER"] = "dummy"
@@ -38,27 +35,6 @@ THROTTLE_LIMIT = params['throttle_limit']
 RECORD_BUTTON = params['record_btn']
 STOP_BUTTON = params['stop_btn']
 PAUSE_BUTTON = params['pause_btn']
-
-# LiDAR Node
-class LidarNode(Node):
-    def __init__(self):
-        super().__init__('lidar_listener')
-        self.lidar_ranges = np.full(360, 25.0, dtype=np.float32)  # Default to max range
-        self.subscription = self.create_subscription(
-            LaserScan,
-            '/scan',
-            self.lidar_callback,
-            10
-        )
-
-    def lidar_callback(self, msg):
-        self.lidar_ranges = np.array(msg.ranges, dtype=np.float32)
-        # Replace 'inf' with max range
-        self.lidar_ranges[np.isinf(self.lidar_ranges)] = 25.0
-
-# Initialize ROS 2 for LiDAR
-rclpy.init()
-lidar_node = LidarNode()
 
 # Initialize hardware
 try:
@@ -123,8 +99,7 @@ fps = 0
 # MAIN LOOP
 try:
     while True:
-        rclpy.spin_once(lidar_node)  # Update LiDAR data
-        ret, color_image = get_realsense_frame(cam)  # Capture RGB frame (no depth)
+        ret, color_image = get_realsense_frame(cam)  # Capture RGB frame only
         if not ret or color_image is None:
             print("No frame received. TERMINATE!")
             break
@@ -141,13 +116,8 @@ try:
         color_image_resized = cv.resize(color_image, (160, 120))
         color_image_normalized = color_image_resized.astype(np.float32) / 255.0
 
-        # Reshape and normalize LiDAR data
-        lidar_image = lidar_node.lidar_ranges.reshape((30, 60))  # Reshape to 30x60 for 1800 points
-        lidar_image_resized = cv.resize(lidar_image, (160, 120)).astype(np.float32) / 25.0
-
-        # Stack RGB and LiDAR to create a 4-channel input
-        combined_image = np.concatenate((color_image_normalized, np.expand_dims(lidar_image_resized, axis=2)), axis=2)
-        img_tensor = combined_image.transpose(2, 0, 1)  # Shape (4, 120, 160)
+        # Prepare the tensor for TensorRT
+        img_tensor = color_image_normalized.transpose(2, 0, 1)  # Shape (3, 120, 160)
 
         # Copy img_tensor to TensorRT input buffer
         np.copyto(inputs[0][0], img_tensor.ravel())
@@ -186,5 +156,4 @@ except KeyboardInterrupt:
 finally:
     pygame.joystick.quit()
     ser_pico.close()
-    rclpy.shutdown()
     cv.destroyAllWindows()

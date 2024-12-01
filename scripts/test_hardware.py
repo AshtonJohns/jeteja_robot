@@ -4,9 +4,6 @@ import cv2 as cv
 import pyrealsense2 as rs
 import numpy as np
 import json
-import rclpy
-from rclpy.node import Node
-from sensor_msgs.msg import LaserScan
 import os
 
 # Load configuration from test_config.json
@@ -21,9 +18,8 @@ def setup_realsense_camera():
     """
     pipeline = rs.pipeline()
     config = rs.config()
-    config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 60)  # RGB stream at 424x240 resolution
+    config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 30)  # RGB stream at 30 FPS
     pipeline.start(config)
-    
     return pipeline
 
 
@@ -72,28 +68,6 @@ def setup_joystick():
     return js
 
 
-class LidarNode(Node):
-    """
-    ROS2 Node for receiving and processing LiDAR data.
-    """
-    def __init__(self):
-        super().__init__('lidar_node')
-        self.lidar_data = []
-        self.subscription = self.create_subscription(
-            LaserScan,
-            '/scan',
-            self.lidar_callback,
-            10
-        )
-
-    def lidar_callback(self, msg):
-        """
-        Callback to store LiDAR ranges.
-        """
-        self.lidar_data = np.array(msg.ranges)
-        self.lidar_data[self.lidar_data == float('inf')] = 25.0  # Replace inf with max range (25 meters)
-
-
 def encode_dutycylce(ax_val_st, ax_val_th, params):
     """
     Calculate duty cycle for steering and throttle based on joystick input.
@@ -129,10 +103,6 @@ def encode(duty_st, duty_th):
 
 
 if __name__ == "__main__":
-    # Initialize ROS2 node for LiDAR
-    rclpy.init()
-    lidar_node = LidarNode()
-
     # Setup RealSense camera
     pipeline = setup_realsense_camera()
 
@@ -148,10 +118,6 @@ if __name__ == "__main__":
 
     try:
         while True:
-            # Spin the LiDAR node to process incoming LiDAR messages
-            rclpy.spin_once(lidar_node, timeout_sec=0.1)
-            lidar_ranges = lidar_node.lidar_data
-
             # Get frames from RealSense camera
             success, color_frame = get_realsense_frame(pipeline)
             if not success:
@@ -192,7 +158,6 @@ if __name__ == "__main__":
     finally:
         # Cleanup resources
         pipeline.stop()
-        rclpy.shutdown()
         pygame.quit()
         if ser:
             ser.close()

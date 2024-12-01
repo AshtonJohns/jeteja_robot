@@ -1,42 +1,29 @@
 import torch.nn as nn
-import torch
 
 class DonkeyNet(nn.Module):
 
     def __init__(self):
         super().__init__()
-        # Convolution layers for processing image data (RGB + Depth)
-        self.conv24 = nn.Conv2d(4, 24, kernel_size=(5, 5), stride=(2, 2))  # RGB/Depth input (4 channels)
+        self.conv24 = nn.Conv2d(3, 24, kernel_size=(5, 5), stride=(2, 2)) #3 for RGB, 4 for RGB/Depth
         self.conv32 = nn.Conv2d(24, 32, kernel_size=(5, 5), stride=(2, 2))
         self.conv64_5 = nn.Conv2d(32, 64, kernel_size=(5, 5), stride=(2, 2))
         self.conv64_3 = nn.Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1))
 
-        # Fully connected layers
-        # The input size to fc1 is now increased by 6 (for IMU data)
-        self.fc1 = nn.Linear(64 * 8 * 13 + 6, 128)  # Added 6 for IMU data (3 accelerometer + 3 gyroscope)
+        self.fc1 = nn.Linear(64*8*13, 128)  # (64*30*30, 128) for 300x300 images
         self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, 2)  # Output for two values: steering and throttle
-
-        # Activation function and flattening
+        self.fc3 = nn.Linear(128, 2)
         self.relu = nn.ReLU()
         self.flatten = nn.Flatten()
 
-    def forward(self, x, imu_data):  # Input of shape (batch_size, 4, 120, 160), imu_data (batch_size, 6)
-        # Process the image data through the convolutional layers
-        x = self.relu(self.conv24(x))  # (120x160) -> (58x78)
-        x = self.relu(self.conv32(x))  # (58x78) -> (27x37)
-        x = self.relu(self.conv64_5(x))  # (27x37) -> (12x17)
-        x = self.relu(self.conv64_3(x))  # (12x17) -> (10x15)
-        x = self.relu(self.conv64_3(x))  # (10x15) -> (8x13)
+    def forward(self, x):               #   300x300                     #  120x160
+        x = self.relu(self.conv24(x))  # (300-5)/2+1 = 148     |     (120-5)/2+1 = 58   (160-5)/2+1 = 78
+        x = self.relu(self.conv32(x))  # (148-5)/2+1 = 72      |     (58 -5)/2+1 = 27   (78 -5)/2+1 = 37
+        x = self.relu(self.conv64_5(x))  # (72-5)/2+1 = 34     |     (27 -5)/2+1 = 12   (37 -5)/2+1 = 17
+        x = self.relu(self.conv64_3(x))  # 34-3+1 = 32         |     12 - 3 + 1  = 10   17 - 3 + 1  = 15
+        x = self.relu(self.conv64_3(x))  # 32-3+1 = 30         |     10 - 3 + 1  = 8    15 - 3 + 1  = 13
 
-        # Flatten the output from the convolution layers
         x = self.flatten(x)
-
-        # Concatenate the IMU data with the image data (after convolution)
-        x = torch.cat((x, imu_data), dim=1)  # Concatenate along the feature dimension (dim=1)
-
-        # Fully connected layers
-        x = self.relu(self.fc1(x))  # (8x13x64 + 6) -> (128)
-        x = self.relu(self.fc2(x))  # (128) -> (128)
-        x = self.fc3(x)  # Final output layer (steering and throttle)
+        x = self.relu(self.fc1(x))
+        x = self.relu(self.fc2(x))
+        x = self.fc3(x)
         return x

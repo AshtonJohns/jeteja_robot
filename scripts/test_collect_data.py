@@ -1,22 +1,19 @@
-# ROS2 RealSense, LiDAR, and Joystick Data Collection
+# Data collection with Realsense Camera (RGB Only)
 
 import os
 import sys
 import json
 import csv
-from time import time, sleep
+from time import time
 from datetime import datetime
 import pygame
-import pyrealsense2 as rs
+import pyrealsense2 as rs  # Import the RealSense library
 import numpy as np
 import cv2
 import serial
-import rclpy
-from rclpy.node import Node
-from sensor_msgs.msg import LaserScan
 
 # Load configs
-params_file_path = os.path.join(sys.path[0], 'test_config.json')
+params_file_path = os.path.join(sys.path[0], 'config.json')
 with open(params_file_path) as params_file:
     params = json.load(params_file)
 
@@ -29,25 +26,8 @@ THROTTLE_STALL = params['throttle_stall']
 THROTTLE_FWD_RANGE = params['throttle_fwd_range']
 THROTTLE_REV_RANGE = params['throttle_rev_range']
 THROTTLE_LIMIT = params['throttle_limit']
-THROTTLE_MIN = params['throttle_min']
 RECORD_BUTTON = params['record_btn']
 STOP_BUTTON = params['stop_btn']
-
-# LiDAR Node for ROS2
-class LidarNode(Node):
-    def __init__(self):
-        super().__init__('lidar_node')
-        self.lidar_data = []
-        self.subscription = self.create_subscription(
-            LaserScan,
-            '/scan',
-            self.lidar_callback,
-            10
-        )
-
-    def lidar_callback(self, msg):
-        # Store the ranges (distance readings)
-        self.lidar_data = msg.ranges
 
 # Initialize hardware (serial communication and joystick)
 try:
@@ -61,15 +41,13 @@ js = pygame.joystick.Joystick(0)
 
 data_dir = os.path.join('data', datetime.now().strftime("%Y-%m-%d-%H-%M"))
 rgb_image_dir = os.path.join(data_dir, 'rgb_images/')
-lidar_image_dir = os.path.join(data_dir, 'lidar_images/')
 label_path = os.path.join(data_dir, 'labels.csv')
 os.makedirs(rgb_image_dir, exist_ok=True)
-os.makedirs(lidar_image_dir, exist_ok=True)
 
-# Initialize RealSense camera pipeline for RGB
+# Initialize RealSense camera pipeline for RGB only
 pipeline = rs.pipeline()
 config = rs.config()
-config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 60)
+config.enable_stream(rs.stream.color, 424, 240, rs.format.bgr8, 30)  # RGB stream only
 
 # Start streaming from the camera
 pipeline.start(config)
@@ -80,53 +58,40 @@ frame_counts = 0
 ax_val_st = 0.
 ax_val_th = 0.
 
+# Initialize frame rate tracking for RGB
+prev_time_rgb = time()
+frame_count_rgb = 0
+fps_rgb = 0
+
 # Initialize Pygame for joystick handling
 pygame.init()
 
-# Initialize ROS2 LiDAR Node
-rclpy.init()  # Initialize ROS2
-lidar_node = LidarNode()  # Create the LiDAR node
-
-# Write CSV headers if the file doesn't exist
-if not os.path.exists(label_path):
-    with open(label_path, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(["image_name", "steering", "throttle", "lidar_ranges"])
-
 try:
     while True:
-        # Capture RGB frames from RealSense
+        # Wait for a new set of frames from the camera
         frames = pipeline.wait_for_frames()
         color_frame = frames.get_color_frame()
-        if not color_frame:
-            continue  # Skip if frame is not ready
 
-        # Convert RGB to numpy array and resize to 120x160
+        if not color_frame:
+            continue  # Skip if frames are not ready
+
+        # Calculate RGB frame rate
+        frame_count_rgb += 1
+        current_time_rgb = time()
+        if current_time_rgb - prev_time_rgb >= 1.0:
+            fps_rgb = frame_count_rgb / (current_time_rgb - prev_time_rgb)
+            print(f"RGB Frame Rate: {fps_rgb:.2f} FPS")
+            prev_time_rgb = current_time_rgb
+            frame_count_rgb = 0
+
+        # Convert color frame to numpy array and resize to 120x160
         color_image = np.asanyarray(color_frame.get_data())
         resized_color_image = cv2.resize(color_image, (160, 120))
 
-        # Get the LiDAR data
-        lidar_data = np.array(lidar_node.lidar_data)
+        # Display the RGB image
+        cv2.imshow('RealSense Stream - RGB Only', resized_color_image)
 
-        # Replace 'inf' values with NaN (max range of A3 LiDAR)
-        lidar_data[np.isinf(lidar_data)] = np.nan
-        
-        # Pad the LiDAR data after the first 1800 points with NaN
-        target_size = 160 * 120  # 19,200 points for 120x160 image resolution
-        if len(lidar_data) < target_size:
-            # Pad with NaN values after the first 1800 valid points
-            lidar_data = np.pad(lidar_data, (0, target_size - len(lidar_data)), constant_values=np.nan)
-        else:
-            # Truncate if more than 19,200 points
-            lidar_data = lidar_data[:target_size]
-
-        # Reshape LiDAR data to fit 120x160 grid
-        lidar_image = lidar_data.reshape(120, 160)
-
-        # Display the RGB image for visualization
-        cv2.imshow('RGB Stream', resized_color_image)
-
-        # Handle joystick inputs
+        # Handle joystick input events
         for e in pygame.event.get():
             if e.type == pygame.JOYAXISMOTION:
                 ax_val_st = round(js.get_axis(STEERING_AXIS), 2)
@@ -143,8 +108,7 @@ try:
 
         # Calculate steering and throttle values
         act_st = -ax_val_st
-        act_th = -ax_val_th
-        duty_st = STEERING_CENTER - STEERING_RANGE + int(STEERING_RANGE * (act_st + 1))
+        act_th = -ax_val_th  # throttle action: -1: max forward, 1: max backward
 
         # Refined throttle control with correct forward and reverse mapping
         if act_th > 0:
@@ -157,28 +121,21 @@ try:
             # No throttle
             duty_th = THROTTLE_STALL
 
+        # Encode steering values
+        duty_st = STEERING_CENTER - STEERING_RANGE + int(STEERING_RANGE * (act_st + 1))
+
         # Send control signals to the microcontroller
         ser_pico.write((f"{duty_st},{duty_th}\n").encode('utf-8'))
 
-        # Spin the LiDAR Node to process ROS callbacks
-        rclpy.spin_once(lidar_node)
-
-        # Get the latest LiDAR data
-        lidar_ranges = lidar_node.lidar_data
-
         # Save data if recording is active
         if is_recording:
-            # Save RGB and LiDAR images
-            rgb_image_name = f"{frame_counts}_rgb.png"
-            lidar_image_name = f"{frame_counts}_lidar.npy"  # Save LiDAR as .npy
+            # Save the RGB image
+            cv2.imwrite(os.path.join(rgb_image_dir, f"{frame_counts}_rgb.png"), resized_color_image)
 
-            cv2.imwrite(os.path.join(rgb_image_dir, rgb_image_name), resized_color_image)
-            np.save(os.path.join(lidar_image_dir, lidar_image_name), lidar_image)  # Save LiDAR data as .npy
-
-            # Log joystick values and LiDAR ranges with image name
+            # Log joystick values with image name
             with open(label_path, 'a+', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow([rgb_image_name, ax_val_st, ax_val_th, lidar_image_name])
+                writer.writerow([f"{frame_counts}_rgb.png", ax_val_st, ax_val_th])
 
             frame_counts += 1  # Increment frame counter
 
@@ -194,3 +151,4 @@ finally:
     pipeline.stop()
     pygame.quit()
     ser_pico.close()
+    cv2.destroyAllWindows()
