@@ -18,12 +18,14 @@
   <depend>joy</depend>
   <depend>realsense2_camera</depend>
   <depend>rplidar_ros</depend>
+  <depend>jeteja_launch_msgs</depend>
 
   <!-- Testing dependencies -->
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>
   <test_depend>python3-pytest</test_depend>
+  <test_depend>jeteja_launch_msgs</test_depend>
 
   <export>
     <build_type>ament_python</build_type>

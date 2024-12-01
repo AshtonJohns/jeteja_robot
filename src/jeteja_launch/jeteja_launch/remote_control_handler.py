@@ -8,6 +8,7 @@ from geometry_msgs.msg import Twist, TwistStamped
 from sensor_msgs.msg import Joy
 from ament_index_python.packages import get_package_share_directory
 from scripts.pico_handler import PicoConnection
+from jeteja_launch_msgs.msg import PwmSignals
 
 class RemoteControlHandler(Node):
     def __init__(self):
@@ -34,27 +35,13 @@ class RemoteControlHandler(Node):
         self.recording_timer = None
 
         # Subscribers and publishers
-        self.cmd_vel_subscription = self.create_subscription(Twist, '/cmd_vel_fixed_rate', self.cmd_vel_callback, 15) # not timestamped, but a steady publish rate
+        # self.cmd_vel_subscription = self.create_subscription(Twist, '/cmd_vel_fixed_rate', self.cmd_vel_callback, 15) # not timestamped, but a steady publish rate
         # self.cmd_vel_subscription = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 15) # not timestamped
         # self.cmd_vel_subscription = self.create_subscription(TwistStamped, '/cmd_vel_stamped', self.cmd_vel_callback, 30) # timestamped, 30 hz for 60 fps
         # NOTE we don't need the time stamped /cmd_vel for the pico
+        self.pwm_signals_subscription = self.create_subscription(PwmSignals, '/pwm_signals', self.send_duty_cycle_to_pico, 15)
         self.joy_subscription = self.create_subscription(Joy, '/joy', self.joy_callback, 10)
         self.recording_status_pub = self.create_publisher(String, '/recording_status', 10)
-        
-
-    def cmd_vel_callback(self, msg):
-        if self.pico_execute.get_state():
-            # linear_x = msg.twist.linear.x
-            # angular_z = msg.twist.angular.z
-            linear_x = msg.linear.x
-            angular_z = msg.angular.z
-            # Convert to PWM duty cycle
-            speed_duty_cycle = lower_control.calculate_motor_duty_cycle(linear_x)
-            steering_duty_cycle = lower_control.calculate_steering_duty_cycle(angular_z)
-            # Send to Pico
-            self.send_duty_cycle_to_pico(speed_duty_cycle, steering_duty_cycle)
-        else:
-            self.send_duty_cycle_to_pico(lower_control.MOTOR_NEUTRAL_DUTY_CYCLE, lower_control.STEERING_NEUTRAL_DUTY_CYCLE)
 
     def joy_callback(self, joy_msg):
         emergency_button = joy_msg.buttons[0]
@@ -134,10 +121,12 @@ class RemoteControlHandler(Node):
         self.destroy_timer(self.pico_timer)
         self.pico_timer = None
         
-    def send_duty_cycle_to_pico(self, speed_duty_cycle, steering_duty_cycle):
-        command = lower_control.create_command_message(speed_duty_cycle, steering_duty_cycle)
-        if self.pico_execute.get_state():
-            if self.pico_enable_state:
+    def send_duty_cycle_to_pico(self, msg):
+        if self.pico_execute.get_state(): # Check if Pico is running and serial connection is established
+            motor_pwm = msg.motor_pwm
+            steering_pwm = msg.steering_pwm
+            command = lower_control.create_command_message(motor_pwm, steering_pwm)
+            if self.pico_enable_state: # Has surpassed the lockdown timer and is enabled
                 self.pico_execute.write(command)
                 self.get_logger().info(f"Sent: {command}")
             # else:

@@ -75,6 +75,20 @@ def generate_launch_description():
     # Shared nodes between 'manual' and 'autopilot' arguments
     shared_nodes = [
 
+        Node(   # cmd_vel_fixed_rate node
+            package='jeteja_launch',
+            executable='cmd_vel_fixed_rate',
+            name='cmd_vel_fixed_rate',
+            output='screen',
+            condition=IfCondition(LaunchConfiguration('manual'))
+        ),
+
+        Node(
+            package='jeteja_launch',
+            executable='cmd_vel_to_pwm',
+            name='cmd_vel_to_pwm'
+        ),
+
         DeclareLaunchArgument(  # teleop config
             'teleop_config_filepath',
             default_value=teleop_config,
@@ -96,9 +110,9 @@ def generate_launch_description():
         ),
 
         DeclareLaunchArgument( # realsense config
-        'realsense_config_filepath',
-        default_value=realsense2_config,
-        description='Path to the realsense2_camera configuration file'
+            'realsense_config_filepath',
+            default_value=realsense2_config,
+            description='Path to the realsense2_camera configuration file'
         ),
 
         IncludeLaunchDescription(   # realsense launch
@@ -131,14 +145,6 @@ def generate_launch_description():
                 ('/cmd_vel_in', '/cmd_vel_fixed_rate'),  # Input: Rate-adjusted topic
                 ('/cmd_vel_out', '/cmd_vel_stamped')    # Output: Stamped topic
             ],
-            condition=IfCondition(LaunchConfiguration('manual'))
-        ),
-
-        Node(   # cmd_vel_fixed_rate node
-            package='jeteja_launch',
-            executable='cmd_vel_fixed_rate',
-            name='cmd_vel_fixed_rate',
-            output='screen',
             condition=IfCondition(LaunchConfiguration('manual'))
         ),
     ]

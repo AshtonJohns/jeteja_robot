@@ -23,7 +23,8 @@ setup(
                       'pyserial',
                       'launch', 
                       'launch_ros', 
-                      'rclpy'],
+                      'rclpy',
+                      'jeteja_launch_msgs'],
     zip_safe=True,
     maintainer='ajay',
     maintainer_email='ashtonmjohns@gmail.com',
@@ -34,6 +35,7 @@ setup(
         'console_scripts': [
             'remote_control_handler = jeteja_launch.remote_control_handler:main',
             'cmd_vel_fixed_rate = jeteja_launch.cmd_vel_fixed_rate:main',
+            'cmd_vel_to_pwm = jeteja_launch.cmd_vel_to_pwm:main',
         ],
     },
 )
