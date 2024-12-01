@@ -1,4 +1,5 @@
 import os
+import traceback
 import rclpy
 import scripts.lower_control as lower_control
 from std_msgs.msg import String
@@ -143,7 +144,7 @@ class RemoteControlHandler(Node):
             #     self.get_logger().info(f"Pico is not alive!")
 
 def main(args=None):
-    import traceback
+    
     rclpy.init(args=args)
     node = None
     try:

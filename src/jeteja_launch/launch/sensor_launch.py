@@ -10,7 +10,7 @@ from launch.conditions import IfCondition
 
 def generate_launch_description():
 
-    # Declare arguments for toggling nodes
+    # Declare arguments for toggling nodes NOTE either 'manual' or 'autopilot'
     manual_control_arg = DeclareLaunchArgument(
         'manual', default_value='false',
         description='Set to true to enable remote_control node'
@@ -19,6 +19,12 @@ def generate_launch_description():
     autopilot_control_arg = DeclareLaunchArgument(
         'autopilot', default_value='false',
         description='Set to true to enable autopilot_control node'
+    )
+
+    # Declare arguments for 'autopilot' node
+    autopilot_model_path_arg = DeclareLaunchArgument(
+        'model', default_value='', 
+        description='**ONLY FOR AUTOPILOT MODE**. The path to the model.trt.'
     )
 
     # Paths to helper scripts and other launch files
@@ -174,6 +180,8 @@ def generate_launch_description():
         manual_control_arg, # argument for manual 
 
         autopilot_control_arg,  # argument for autopilot
+
+        autopilot_model_path_arg, # argument for model path
 
         # --- NODES ---
 
