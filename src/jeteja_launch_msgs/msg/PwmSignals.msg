@@ -1,3 +1,3 @@
 builtin_interfaces/Time stamp
-float32 motor_pwm
-float32 steering_pwm
+int32 motor_pwm
+int32 steering_pwm
