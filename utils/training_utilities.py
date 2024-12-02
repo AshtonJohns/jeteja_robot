@@ -14,7 +14,6 @@ trtexec --onnx=model.onnx --saveEngine=model.trt --fp16 --shapes=color_input:1x{
     with open(output_file, "w") as bash_file:
         bash_file.write(bash_content)
 
-    import os
     os.chmod(output_file, 0o755)
 
     print(f"Bash script '{output_file}' written and made executable.")
