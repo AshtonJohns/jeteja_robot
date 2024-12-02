@@ -26,7 +26,7 @@ else:
 policy = mixed_precision.Policy('mixed_float16')
 mixed_precision.set_global_policy(policy)
 
-# DATA TYPES
+# DATA TYPES # TODO update this
 PWM_DATA_TYPE = tf.float32
 COLOR_DATA_TYPE = tf.uint8
 DEPTH_DATA_TYPE = tf.uint16
@@ -54,27 +54,36 @@ assert os.path.exists(val_tfrecord), f"Validation TFRecord not found: {val_tfrec
 # Parse TFRecord
 def parse_tfrecord(example_proto):
     feature_description = {
-        'color_image': tf.io.FixedLenFeature([], tf.string),  # Correct for raw bytes
-        'depth_image': tf.io.FixedLenFeature([], tf.string),  # Correct for raw bytes
-        'motor_pwm': tf.io.FixedLenFeature([], tf.int64),  # Match serialized type
-        'steering_pwm': tf.io.FixedLenFeature([], tf.int64),  # Match serialized type
+        'color_image': tf.io.FixedLenFeature([], tf.string),
+        'depth_image': tf.io.FixedLenFeature([], tf.string),
+        'motor_pwm': tf.io.FixedLenFeature([], tf.float32),  # Use float32 if normalized
+        'steering_pwm': tf.io.FixedLenFeature([], tf.float32),  # Use float32 if normalized
     }
     parsed_features = tf.io.parse_single_example(example_proto, feature_description)
 
     # Decode images from serialized bytes
-    color_image = tf.io.decode_raw(parsed_features['color_image'], COLOR_DATA_TYPE)  # Match serialized type
-    depth_image = tf.io.decode_raw(parsed_features['depth_image'], DEPTH_DATA_TYPE)  # Match serialized type
+    color_image = tf.io.decode_raw(parsed_features['color_image'], tf.float32)
+    depth_image = tf.io.decode_raw(parsed_features['depth_image'], tf.float32)
 
-    # Reshape images (consistent with preprocessing)
+    # Reshape images to their correct dimensions
     color_image = tf.reshape(color_image, (COLOR_WIDTH, COLOR_LENGTH, 3))
     depth_image = tf.reshape(depth_image, (DEPTH_WIDTH, DEPTH_LENGTH, 1))
 
-    # Cast motor_pwm and steering_pwm to tf.float32 for compatibility with training
-    motor_pwm = tf.cast(parsed_features['motor_pwm'], PWM_DATA_TYPE)
-    steering_pwm = tf.cast(parsed_features['steering_pwm'], PWM_DATA_TYPE)
+    # Motor and Steering PWM are already normalized to [0, 1] during serialization
+    motor_pwm = parsed_features['motor_pwm']
+    steering_pwm = parsed_features['steering_pwm']
 
-    return ({"color_input": color_image, "depth_input": depth_image},
-            {"motor_pwm": motor_pwm, "steering_pwm": steering_pwm})
+    # # Debugging: Print shapes and ranges
+    # tf.print("Parsed color image shape:", tf.shape(color_image))
+    # tf.print("Parsed depth image shape:", tf.shape(depth_image))
+    # tf.print("Parsed motor PWM:", motor_pwm)
+    # tf.print("Parsed steering PWM:", steering_pwm)
+
+    return (
+        {"color_input": color_image, "depth_input": depth_image},
+        {"motor_pwm": motor_pwm, "steering_pwm": steering_pwm},
+    )
+
 
 
 # Prepare datasets

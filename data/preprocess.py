@@ -11,6 +11,16 @@ from sklearn.model_selection import train_test_split
 COLOR_NORMALIZATION_FACTOR = 255.0  # For uint8 images
 DEPTH_NORMALIZATION_FACTOR = 65535.0  # For uint16 images
 
+# Define motor and steering normalization constants based on their ranges
+MOTOR_PWM_MIN = 3277
+MOTOR_PWM_MAX = 6553
+STEERING_PWM_MIN = 3277
+STEERING_PWM_MAX = 6553
+
+MOTOR_PWM_NORMALIZATION_FACTOR = MOTOR_PWM_MAX - MOTOR_PWM_MIN
+STEERING_PWM_NORMALIZATION_FACTOR = STEERING_PWM_MAX - STEERING_PWM_MIN
+
+
 
 def process_commands(commands_path, output_dir, **kwargs):
     """
@@ -131,18 +141,23 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
             if len(depth_image.shape) == 2:
                 depth_image = np.expand_dims(depth_image, axis=-1)  # Add channel dimension
 
+            # Normalize PWM values to [0, 1]
+            motor_pwm_normalized = (row['motor_pwm'] - MOTOR_PWM_MIN) / MOTOR_PWM_NORMALIZATION_FACTOR
+            steering_pwm_normalized = (row['steering_pwm'] - STEERING_PWM_MIN) / STEERING_PWM_NORMALIZATION_FACTOR
             # Debugging
             print(f"Color image range: {color_image.min()} to {color_image.max()}")
             print(f"Depth image range: {depth_image.min()} to {depth_image.max()}")
             print(f"Color image shape before serialization: {color_image.shape}, dtype: {color_image.dtype}")
             print(f"Depth image shape before serialization: {depth_image.shape}, dtype: {depth_image.dtype}")
+            print(f"Normalized motor pwm: {motor_pwm_normalized}")
+            print(f"Normalized steering pwm: {steering_pwm_normalized}")
 
             # Serialize data
             example = serialize_example(
                 color_image=color_image,
                 depth_image=depth_image,
-                motor_pwm=row['motor_pwm'],
-                steering_pwm=row['steering_pwm']
+                motor_pwm=motor_pwm_normalized,
+                steering_pwm=steering_pwm_normalized
             )
             writer.write(example)
 
@@ -156,8 +171,8 @@ def serialize_example(color_image, depth_image, motor_pwm, steering_pwm):
     Args:
         color_image (numpy.ndarray): The processed color image.
         depth_image (numpy.ndarray): The processed depth image.
-        motor_pwm (int): Motor PWM for the frame.
-        steering_pwm (int): Steering PWM for the frame.
+        motor_pwm (float): Normalized motor PWM for the frame.
+        steering_pwm (float): Normalized steering PWM for the frame.
 
     Returns:
         Serialized tf.train.Example.
@@ -165,8 +180,8 @@ def serialize_example(color_image, depth_image, motor_pwm, steering_pwm):
     feature = {
         'color_image': tf.train.Feature(bytes_list=tf.train.BytesList(value=[color_image.tobytes()])),
         'depth_image': tf.train.Feature(bytes_list=tf.train.BytesList(value=[depth_image.tobytes()])),
-        'motor_pwm': tf.train.Feature(int64_list=tf.train.Int64List(value=[motor_pwm])),
-        'steering_pwm': tf.train.Feature(int64_list=tf.train.Int64List(value=[steering_pwm])),
+        'motor_pwm': tf.train.Feature(float_list=tf.train.FloatList(value=[motor_pwm])),
+        'steering_pwm': tf.train.Feature(float_list=tf.train.FloatList(value=[steering_pwm])),
     }
     return tf.train.Example(features=tf.train.Features(feature=feature)).SerializeToString()
 
