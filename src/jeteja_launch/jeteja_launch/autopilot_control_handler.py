@@ -9,6 +9,7 @@ from std_msgs.msg import String
 import scripts.lower_control as lower_control
 from scripts.pico_handler import PicoConnection
 from ament_index_python.packages import get_package_share_directory
+from jeteja_launch_msgs.msg import PwmSignals
 
 class AutoPilotControlHandler(Node):
     def __init__(self):
