@@ -62,7 +62,7 @@ def extract_rosbag(bag_files, output_dir):
             topic, msg_data, timestamp = reader.read_next() # NOTE this timestamp is not used
 
             # Process color images
-            if topic == '/camera/color/image_raw':
+            if topic == '/camera/camera/color/image_raw':
                 image_msg = deserialize_message(msg_data, get_message(type_map[topic]))
                 cv_image = bridge.imgmsg_to_cv2(image_msg, desired_encoding='bgr8')
                 timestamp_str = f"{image_msg.header.stamp.sec}_{image_msg.header.stamp.nanosec}"
@@ -70,7 +70,7 @@ def extract_rosbag(bag_files, output_dir):
                 cv2.imwrite(color_image_filename, cv_image)
 
             # Process depth images
-            elif topic == '/camera/depth/image_rect_raw':
+            elif topic == '/camera/camera/depth/image_rect_raw':
                 depth_msg = deserialize_message(msg_data, get_message(type_map[topic]))
                 depth_image = bridge.imgmsg_to_cv2(depth_msg, desired_encoding='passthrough')
                 timestamp_str = f"{depth_msg.header.stamp.sec}_{depth_msg.header.stamp.nanosec}"
@@ -85,8 +85,8 @@ def extract_rosbag(bag_files, output_dir):
                 steering_pwm = command_msg.steering_pwm
 
                 # Use the header's timestamp
-                sec = command_msg.header.stamp.sec
-                nanosec = command_msg.header.stamp.nanosec
+                sec = command_msg.stamp.sec
+                nanosec = command_msg.stamp.nanosec
                 timestamp_str = f"{sec}_{nanosec}"
 
                 # Match image filenames for commands
