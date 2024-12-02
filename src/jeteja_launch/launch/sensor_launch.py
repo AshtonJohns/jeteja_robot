@@ -137,16 +137,6 @@ def generate_launch_description():
             condition=IfCondition(LaunchConfiguration('manual'))
         ),
 
-        Node(   # twist_stamper node
-            package='twist_stamper',
-            executable='twist_stamper',
-            name='twist_stamper',
-            remappings=[
-                ('/cmd_vel_in', '/cmd_vel_fixed_rate'),  # Input: Rate-adjusted topic
-                ('/cmd_vel_out', '/cmd_vel_stamped')    # Output: Stamped topic
-            ],
-            condition=IfCondition(LaunchConfiguration('manual'))
-        ),
     ]
 
     # Instructional message to display the control mappings

@@ -4,7 +4,7 @@ import rclpy
 import scripts.lower_control as lower_control
 from std_msgs.msg import String
 from rclpy.node import Node
-from geometry_msgs.msg import Twist, TwistStamped
+# from geometry_msgs.msg import Twist, TwistStamped
 from sensor_msgs.msg import Joy
 from ament_index_python.packages import get_package_share_directory
 from scripts.pico_handler import PicoConnection
@@ -128,7 +128,7 @@ class RemoteControlHandler(Node):
             command = lower_control.create_command_message(motor_pwm, steering_pwm)
             if self.pico_enable_state: # Has surpassed the lockdown timer and is enabled
                 self.pico_execute.write(command)
-                self.get_logger().info(f"Sent: {command}")
+                # self.get_logger().info(f"Sent: {command}")
             # else:
             #     self.get_logger().info(f"Pico is not alive!")
 

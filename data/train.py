@@ -51,8 +51,8 @@ def parse_tfrecord(example_proto):
     feature_description = {
         'color_image': tf.io.FixedLenFeature([], tf.string),
         'depth_image': tf.io.FixedLenFeature([], tf.string),
-        'linear_x': tf.io.FixedLenFeature([], tf.float32),
-        'angular_z': tf.io.FixedLenFeature([], tf.float32),
+        'motor_pwm': tf.io.FixedLenFeature([], tf.float32),
+        'steering_pwm': tf.io.FixedLenFeature([], tf.float32),
     }
     parsed_features = tf.io.parse_single_example(example_proto, feature_description)
 
@@ -65,7 +65,7 @@ def parse_tfrecord(example_proto):
     depth_image = tf.reshape(depth_image, (DEPTH_WIDTH, DEPTH_LENGTH, 1))
 
     return ({"color_input": color_image, "depth_input": depth_image},
-            {"linear_x": parsed_features['linear_x'], "angular_z": parsed_features['angular_z']})
+            {"motor_pwm": parsed_features['motor_pwm'], "steering_pwm": parsed_features['steering_pwm']})
 
 # Prepare datasets
 def prepare_dataset(tfrecord_path, batch_size, shuffle=True):
@@ -103,13 +103,13 @@ def create_model():
     x = layers.Dense(128, activation='relu')(x)
 
     # Outputs
-    linear_output = layers.Dense(1, name='linear_x')(x)
-    angular_output = layers.Dense(1, name='angular_z')(x)
+    linear_output = layers.Dense(1, name='motor_pwm')(x)
+    angular_output = layers.Dense(1, name='steering_pwm')(x)
 
     # Compile model
     model = Model(inputs=[color_input, depth_input], outputs=[linear_output, angular_output])
     optimizer = tf.keras.optimizers.Adam()
-    model.compile(optimizer=optimizer, loss={'linear_x': 'mse', 'angular_z': 'mse'})
+    model.compile(optimizer=optimizer, loss={'motor_pwm': 'mse', 'steering_pwm': 'mse'})
     return model
 
 # Training setup

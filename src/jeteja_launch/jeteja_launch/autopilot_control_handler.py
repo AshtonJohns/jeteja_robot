@@ -84,7 +84,7 @@ class AutoPilotControlHandler(Node):
 
     def generate_mock_output(self, color_input, depth_input):
         """Placeholder for model inference. Replace with actual TensorRT code."""
-        # Mock values for linear_x and angular_z
+        # Mock values for motor_pwm and steering_pwm
         return 0.5, -0.2
 
     def send_duty_cycle_to_pico(self, speed_duty_cycle, steering_duty_cycle):

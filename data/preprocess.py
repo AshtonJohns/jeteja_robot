@@ -47,6 +47,7 @@ def process_commands(commands_path, output_dir, **kwargs):
 
     print(f"Commands file processed and saved to {processed_commands_path}.")
 
+
 def find_image(image_name, search_dir):
     """
     Search for an image file in a directory, matching up to the second underscore,
@@ -87,6 +88,7 @@ def find_image(image_name, search_dir):
     # return None  # No match found
     raise Exception("Didn't find an image")
 
+
 def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
     """
     Processes and saves images and commands to a TFRecord file.
@@ -97,6 +99,13 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
         commands_df (pd.DataFrame): DataFrame containing commands and image filenames.
         output_path (str): Path to save the TFRecord file.
     """
+    def check_image_type(image):
+        # Determine if it's an 8-bit image
+        if image.dtype == "uint8" and image.min() >= 0 and image.max() <= 255:
+            print("The image is 8-bit.")
+        else:
+            raise Exception("The image is not 8-bit.")
+
     with tf.io.TFRecordWriter(output_path) as writer:
         for _, row in commands_df.iterrows():
             color_image_path = os.path.join(color_dir, row['color_image_filename'])
@@ -109,6 +118,10 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
             if color_image is None or depth_image is None:
                 print(f"Skipping row due to missing images: {row}")
                 continue
+
+            # Determine if it's an 8-bit image
+            check_image_type(color_image)
+            check_image_type(depth_image)
 
             # Normalize color image
             color_image = (color_image / 255.0).astype(np.float32)
@@ -135,22 +148,22 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
             example = serialize_example(
                 color_image=color_image,
                 depth_image=depth_image,
-                linear_x=row['linear_x'],
-                angular_z=row['angular_z']
+                motor_pwm=row['motor_pwm'],
+                steering_pwm=row['steering_pwm']
             )
             writer.write(example)
     print(f"TFRecord saved to {output_path}")
 
 
-def serialize_example(color_image, depth_image, linear_x, angular_z):
+def serialize_example(color_image, depth_image, motor_pwm, steering_pwm):
     """
     Creates a tf.train.Example message for serialization.
 
     Args:
         color_image (numpy.ndarray): The processed color image.
         depth_image (numpy.ndarray): The processed depth image.
-        linear_x (float): Linear velocity for the frame.
-        angular_z (float): Angular velocity for the frame.
+        motor_pwm (int): Motor PWM for the frame.
+        steering_pwm (int): Steering PWM for the frame.
 
     Returns:
         Serialized tf.train.Example.
@@ -158,11 +171,10 @@ def serialize_example(color_image, depth_image, linear_x, angular_z):
     feature = {
         'color_image': tf.train.Feature(bytes_list=tf.train.BytesList(value=[color_image.tobytes()])),
         'depth_image': tf.train.Feature(bytes_list=tf.train.BytesList(value=[depth_image.tobytes()])),
-        'linear_x': tf.train.Feature(float_list=tf.train.FloatList(value=[linear_x])),
-        'angular_z': tf.train.Feature(float_list=tf.train.FloatList(value=[angular_z])),
+        'motor_pwm': tf.train.Feature(int64_list=tf.train.Int64List(value=[motor_pwm])),
+        'steering_pwm': tf.train.Feature(int64_list=tf.train.Int64List(value=[steering_pwm])),
     }
     return tf.train.Example(features=tf.train.Features(feature=feature)).SerializeToString()
-
 
 
 def main():
@@ -182,9 +194,9 @@ def main():
 
     # Process commands.csv and update paths
     process_commands(commands_path, output_dir, 
-                    color_dir=color_image_dir,
-                    depth_dir=depth_image_dir)
-    
+                     color_dir=color_image_dir,
+                     depth_dir=depth_image_dir)
+
     updated_commands_path = os.path.join(output_dir, 'commands.csv')
 
     # Load the updated commands.csv
