@@ -7,6 +7,10 @@ import numpy as np
 from utils.file_utilities import get_latest_directory
 from sklearn.model_selection import train_test_split
 
+# Constants for normalization
+COLOR_NORMALIZATION_FACTOR = 255.0  # For uint8 images
+DEPTH_NORMALIZATION_FACTOR = 65535.0  # For uint16 images
+
 
 def process_commands(commands_path, output_dir, **kwargs):
     """
@@ -99,13 +103,6 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
         commands_df (pd.DataFrame): DataFrame containing commands and image filenames.
         output_path (str): Path to save the TFRecord file.
     """
-    def check_image_type(image):
-        # Determine if it's an 8-bit image
-        if image.dtype == "uint8" and image.min() >= 0 and image.max() <= 255:
-            print("The image is 8-bit.")
-        else:
-            raise Exception("The image is not 8-bit.")
-
     with tf.io.TFRecordWriter(output_path) as writer:
         for _, row in commands_df.iterrows():
             color_image_path = os.path.join(color_dir, row['color_image_filename'])
@@ -119,24 +116,20 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
                 print(f"Skipping row due to missing images: {row}")
                 continue
 
-            # Determine if it's an 8-bit image
-            check_image_type(color_image)
-            check_image_type(depth_image)
+            # Validate image types
+            if color_image.dtype != np.uint8:
+                raise Exception(f"Color image is not uint8. Found: {color_image.dtype}")
+            if depth_image.dtype != np.uint16:
+                raise Exception(f"Depth image is not uint16. Found: {depth_image.dtype}")
 
-            # Normalize color image
-            color_image = (color_image / 255.0).astype(np.float32)
+            # Normalize color image to [0, 1]
+            color_image = (color_image / COLOR_NORMALIZATION_FACTOR).astype(np.float32)
 
-            # Normalize depth image
-            depth_image = depth_image.astype(np.float32)
+            # Normalize depth image to range [0, 1]
+            depth_image = depth_image.astype(np.float32) / DEPTH_NORMALIZATION_FACTOR
+
             if len(depth_image.shape) == 2:
                 depth_image = np.expand_dims(depth_image, axis=-1)  # Add channel dimension
-
-            # Choose normalization strategy for depth
-            max_depth = np.max(depth_image)
-            if max_depth > 0:
-                depth_image = depth_image / max_depth
-            else:
-                print(f"Warning: Depth image max value is zero, skipping normalization.")
 
             # Debugging
             print(f"Color image range: {color_image.min()} to {color_image.max()}")
@@ -152,6 +145,7 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
                 steering_pwm=row['steering_pwm']
             )
             writer.write(example)
+
     print(f"TFRecord saved to {output_path}")
 
 

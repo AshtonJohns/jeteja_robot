@@ -26,6 +26,11 @@ else:
 policy = mixed_precision.Policy('mixed_float16')
 mixed_precision.set_global_policy(policy)
 
+# DATA TYPES
+PWM_DATA_TYPE = tf.float32
+COLOR_DATA_TYPE = tf.uint8
+DEPTH_DATA_TYPE = tf.uint16
+
 # DIMENSIONS
 COLOR_WIDTH = 360
 COLOR_LENGTH = 640
@@ -49,23 +54,28 @@ assert os.path.exists(val_tfrecord), f"Validation TFRecord not found: {val_tfrec
 # Parse TFRecord
 def parse_tfrecord(example_proto):
     feature_description = {
-        'color_image': tf.io.FixedLenFeature([], tf.string),
-        'depth_image': tf.io.FixedLenFeature([], tf.string),
-        'motor_pwm': tf.io.FixedLenFeature([], tf.float32),
-        'steering_pwm': tf.io.FixedLenFeature([], tf.float32),
+        'color_image': tf.io.FixedLenFeature([], tf.string),  # Correct for raw bytes
+        'depth_image': tf.io.FixedLenFeature([], tf.string),  # Correct for raw bytes
+        'motor_pwm': tf.io.FixedLenFeature([], tf.int64),  # Match serialized type
+        'steering_pwm': tf.io.FixedLenFeature([], tf.int64),  # Match serialized type
     }
     parsed_features = tf.io.parse_single_example(example_proto, feature_description)
 
     # Decode images from serialized bytes
-    color_image = tf.io.decode_raw(parsed_features['color_image'], tf.float32)
-    depth_image = tf.io.decode_raw(parsed_features['depth_image'], tf.float32)
+    color_image = tf.io.decode_raw(parsed_features['color_image'], COLOR_DATA_TYPE)  # Match serialized type
+    depth_image = tf.io.decode_raw(parsed_features['depth_image'], DEPTH_DATA_TYPE)  # Match serialized type
 
     # Reshape images (consistent with preprocessing)
     color_image = tf.reshape(color_image, (COLOR_WIDTH, COLOR_LENGTH, 3))
     depth_image = tf.reshape(depth_image, (DEPTH_WIDTH, DEPTH_LENGTH, 1))
 
+    # Cast motor_pwm and steering_pwm to tf.float32 for compatibility with training
+    motor_pwm = tf.cast(parsed_features['motor_pwm'], PWM_DATA_TYPE)
+    steering_pwm = tf.cast(parsed_features['steering_pwm'], PWM_DATA_TYPE)
+
     return ({"color_input": color_image, "depth_input": depth_image},
-            {"motor_pwm": parsed_features['motor_pwm'], "steering_pwm": parsed_features['steering_pwm']})
+            {"motor_pwm": motor_pwm, "steering_pwm": steering_pwm})
+
 
 # Prepare datasets
 def prepare_dataset(tfrecord_path, batch_size, shuffle=True):
@@ -80,7 +90,7 @@ def prepare_dataset(tfrecord_path, batch_size, shuffle=True):
 # Create the model
 def create_model():
     # Color input and features
-    color_input = Input(shape=(COLOR_WIDTH, COLOR_LENGTH, 3), name='color_input')
+    color_input = Input(shape=(COLOR_WIDTH, COLOR_LENGTH, 3), name='color_input')  # Color has 3 channels
     color_features = layers.Conv2D(64, (3, 3), activation='relu')(color_input)
     color_features = layers.MaxPooling2D((2, 2))(color_features)
     color_features = layers.Conv2D(128, (3, 3), activation='relu')(color_features)
@@ -89,7 +99,7 @@ def create_model():
     color_features = layers.Dense(512, activation='relu')(color_features)
 
     # Depth input and features
-    depth_input = Input(shape=(DEPTH_WIDTH, DEPTH_LENGTH, 3), name='depth_input')
+    depth_input = Input(shape=(DEPTH_WIDTH, DEPTH_LENGTH, 1), name='depth_input')  # Corrected to 1 channel
     depth_features = layers.Conv2D(64, (3, 3), activation='relu')(depth_input)
     depth_features = layers.MaxPooling2D((2, 2))(depth_features)
     depth_features = layers.Conv2D(128, (3, 3), activation='relu')(depth_features)
@@ -112,63 +122,65 @@ def create_model():
     model.compile(optimizer=optimizer, loss={'motor_pwm': 'mse', 'steering_pwm': 'mse'})
     return model
 
-# Training setup
-batch_size = 16
-epochs = 15
 
-train_dataset = prepare_dataset(train_tfrecord, batch_size=batch_size, shuffle=True)
-val_dataset = prepare_dataset(val_tfrecord, batch_size=batch_size, shuffle=False)
+if __name__ == '__main__':
+    # Training setup
+    batch_size = 16
+    epochs = 15
 
-model = create_model()
-model.summary()
+    train_dataset = prepare_dataset(train_tfrecord, batch_size=batch_size, shuffle=True)
+    val_dataset = prepare_dataset(val_tfrecord, batch_size=batch_size, shuffle=False)
 
-# Callbacks
-callbacks = [
-    tf.keras.callbacks.ModelCheckpoint(
-        filepath=os.path.join(MODEL_DIR, "best_model.keras"),
-        monitor="val_loss",
-        save_best_only=True,
-        verbose=1
-    ),
-    tf.keras.callbacks.CSVLogger(
-        os.path.join(MODEL_DIR, "training_log.csv"),
-        append=True
-    ),
-    tf.keras.callbacks.EarlyStopping(
-        monitor="val_loss",
-        patience=5,
-        verbose=1,
-        restore_best_weights=True
-    ),
-]
+    model = create_model()
+    model.summary()
 
-# Train the model
-history = model.fit(
-    train_dataset,
-    validation_data=val_dataset,
-    epochs=epochs,
-    callbacks=callbacks
-)
+    # Callbacks
+    callbacks = [
+        tf.keras.callbacks.ModelCheckpoint(
+            filepath=os.path.join(MODEL_DIR, "best_model.keras"),
+            monitor="val_loss",
+            save_best_only=True,
+            verbose=1
+        ),
+        tf.keras.callbacks.CSVLogger(
+            os.path.join(MODEL_DIR, "training_log.csv"),
+            append=True
+        ),
+        tf.keras.callbacks.EarlyStopping(
+            monitor="val_loss",
+            patience=5,
+            verbose=1,
+            restore_best_weights=True
+        ),
+    ]
 
-# Save the final model and plot
-model.save(os.path.join(MODEL_DIR, "final_model.keras"))
+    # Train the model
+    history = model.fit(
+        train_dataset,
+        validation_data=val_dataset,
+        epochs=epochs,
+        callbacks=callbacks
+    )
 
-# Export SaveModel for trt
-model.export(os.path.join(MODEL_DIR, "SavedModel"))
+    # Save the final model and plot
+    model.save(os.path.join(MODEL_DIR, "final_model.keras"))
 
-# Write bash scripts
-write_savedmodel_to_onnx_script(os.path.join(MODEL_DIR, 'convert_onnx.bash'))
+    # Export SaveModel for trt
+    model.export(os.path.join(MODEL_DIR, "SavedModel"))
 
-write_run_trt_optimizer_script(COLOR_WIDTH, COLOR_LENGTH, DEPTH_WIDTH, DEPTH_LENGTH,
-                  os.path.join(MODEL_DIR, 'run_trt.bash'))
+    # Write bash scripts
+    write_savedmodel_to_onnx_script(os.path.join(MODEL_DIR, 'convert_onnx.bash'))
 
-history_df = pd.DataFrame(history.history)
-history_df.to_csv(os.path.join(MODEL_DIR, "training_history.csv"), index=False)
+    write_run_trt_optimizer_script(COLOR_WIDTH, COLOR_LENGTH, DEPTH_WIDTH, DEPTH_LENGTH,
+                    os.path.join(MODEL_DIR, 'run_trt.bash'))
 
-plt.plot(history.history['loss'], label='Training Loss')
-plt.plot(history.history['val_loss'], label='Validation Loss')
-plt.legend()
-plt.xlabel('Epoch')
-plt.ylabel('Loss')
-plt.title('Training vs Validation Loss')
-plt.savefig(os.path.join(MODEL_DIR, "training_vs_validation.png"))
+    history_df = pd.DataFrame(history.history)
+    history_df.to_csv(os.path.join(MODEL_DIR, "training_history.csv"), index=False)
+
+    plt.plot(history.history['loss'], label='Training Loss')
+    plt.plot(history.history['val_loss'], label='Validation Loss')
+    plt.legend()
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training vs Validation Loss')
+    plt.savefig(os.path.join(MODEL_DIR, "training_vs_validation.png"))
