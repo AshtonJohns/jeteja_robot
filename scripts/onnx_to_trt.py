@@ -30,7 +30,7 @@ def build_engine(onnx_file_path, engine_file_path):
 
         # Check the input shape of the network to ensure it matches (4, 120, 160)
         input_shape = network.get_input(0).shape
-        expected_shape = (1, 3, 120, 160)  # Batch size 1, 4 channels, 120x160 resolution
+        expected_shape = (1, 4, 120, 160)  # Batch size 1, 4 channels, 120x160 resolution
         if input_shape != expected_shape:
             print(f"Error: The ONNX model's input shape {input_shape} does not match the expected shape {expected_shape}.")
             return None
