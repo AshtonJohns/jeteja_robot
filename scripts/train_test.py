@@ -110,7 +110,7 @@ test_dataloader = DataLoader(test_data, batch_size=125)
 # Create model
 model = convnets.DonkeyNet().to(DEVICE)  # Adjust input channels to 3 (RGB only)
 # Hyper-parameters
-lr = 0.001
+lr = 0.002
 optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0.0001)
 loss_fn = standard_loss
 epochs = 15
