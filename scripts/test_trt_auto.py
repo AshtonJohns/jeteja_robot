@@ -32,9 +32,8 @@ THROTTLE_STALL = params['throttle_stall']
 THROTTLE_FWD_RANGE = params['throttle_fwd_range']
 THROTTLE_REV_RANGE = params['throttle_rev_range']
 THROTTLE_LIMIT = params['throttle_limit']
-RECORD_BUTTON = params['record_btn']
-STOP_BUTTON = params['stop_btn']
 PAUSE_BUTTON = params['pause_btn']
+STOP_BUTTON = params['stop_btn']
 
 # Initialize hardware
 try:
@@ -47,7 +46,7 @@ is_paused = True
 
 # Load TensorRT engine
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
-engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_2024-11-22-12-46.trt"  # Path to the TensorRT model
+engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_0.002lr_2024-12-01-18-43.trt"  # Path to the TensorRT model
 
 with open(engine_path, "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
     engine = runtime.deserialize_cuda_engine(f.read())
@@ -99,18 +98,19 @@ fps = 0
 # MAIN LOOP
 try:
     while True:
-        ret, color_image = get_realsense_frame(cam)  # Capture RGB frame only
+        ret, color_image = get_realsense_frame(cam)  # Capture RGB frame
         if not ret or color_image is None:
             print("No frame received. TERMINATE!")
             break
 
         for e in pygame.event.get():
             if e.type == pygame.JOYBUTTONDOWN:
-                if js.get_button(params['pause_btn']):
+                if js.get_button(PAUSE_BUTTON):
                     is_paused = not is_paused
-                elif js.get_button(params['stop_btn']):
+                elif js.get_button(STOP_BUTTON):
                     print("E-STOP PRESSED. TERMINATE!")
-                    break
+                    ser_pico.write(b"END,END\n")
+                    raise KeyboardInterrupt
 
         # Resize and normalize RGB image
         color_image_resized = cv.resize(color_image, (160, 120))
@@ -118,6 +118,7 @@ try:
 
         # Prepare the tensor for TensorRT
         img_tensor = color_image_normalized.transpose(2, 0, 1)  # Shape (3, 120, 160)
+        img_tensor = np.expand_dims(img_tensor, axis=0)  # Add batch dimension, now shape is (1, 3, 120, 160)
 
         # Copy img_tensor to TensorRT input buffer
         np.copyto(inputs[0][0], img_tensor.ravel())
@@ -133,7 +134,7 @@ try:
         st_trim = max(min(float(pred_st), 0.999), -0.999)
         th_trim = max(min(float(pred_th), 0.999), -0.999)
 
-        # Encode and send commands as usual
+        # Encode and send commands
         if not is_paused:
             msg = encode_dutycylce(st_trim, th_trim, params)
         else:

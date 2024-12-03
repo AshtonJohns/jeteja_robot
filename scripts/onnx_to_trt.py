@@ -4,8 +4,8 @@ import pycuda.autoinit
 import os
 
 # Path to your ONNX model
-onnx_model_path = "/home/ucajetson/UCAJetson/data/2024-11-22-12-46/DonkeyNet-15epochs-0.001lr.onnx"  # Replace with your ONNX file path
-trt_engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_2024-11-22-12-46.trt"  # The output TensorRT engine file
+onnx_model_path = "/home/ucajetson/UCAJetson/data/2024-12-01-16-39/DonkeyNet-15epochs-0.001lr.onnx"  # Replace with your ONNX file path
+trt_engine_path = "/home/ucajetson/UCAJetson/models/TensorRT_2024-12-01-16-39.trt"  # The output TensorRT engine file
 
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
@@ -30,7 +30,7 @@ def build_engine(onnx_file_path, engine_file_path):
 
         # Check the input shape of the network to ensure it matches (4, 120, 160)
         input_shape = network.get_input(0).shape
-        expected_shape = (1, 4, 120, 160)  # Batch size 1, 4 channels, 120x160 resolution
+        expected_shape = (1, 3, 120, 160)  # Batch size 1, 4 channels, 120x160 resolution
         if input_shape != expected_shape:
             print(f"Error: The ONNX model's input shape {input_shape} does not match the expected shape {expected_shape}.")
             return None
