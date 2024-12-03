@@ -1,8 +1,5 @@
 import subprocess
-import mpremote.main
-import mpremote.transport_serial
 import serial
-import mpremote
 
 class PicoConnection(object):
     def __init__(self, path) -> None:

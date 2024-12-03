@@ -36,7 +36,22 @@ def calculate_steering_duty_cycle(value):
         return int(STEERING_NEUTRAL_DUTY_CYCLE + (value * (STEERING_NEUTRAL_DUTY_CYCLE - STEERING_MIN_DUTY_CYCLE)))
     else:
         return STEERING_NEUTRAL_DUTY_CYCLE
+    
+def perform_safe_speed_check(speed, steering):
+    if speed > MOTOR_MAX_DUTY_CYCLE:
+        speed = MOTOR_MAX_DUTY_CYCLE
+    elif speed < MOTOR_MIN_DUTY_CYCLE:
+        speed = MOTOR_MIN_DUTY_CYCLE
+        
+    if steering > STEERING_MAX_DUTY_CYCLE:
+        steering = STEERING_MAX_DUTY_CYCLE
+    elif steering < STEERING_MIN_DUTY_CYCLE:
+        steering = STEERING_MIN_DUTY_CYCLE
+    
+    return speed, steering
 
 def create_command_message(speed_duty_cycle, steering_duty_cycle):
+    speed_duty_cycle, steering_duty_cycle = perform_safe_speed_check(speed_duty_cycle,
+                                                                     steering_duty_cycle)
     command = f"SPEED:{speed_duty_cycle};STEER:{steering_duty_cycle}\n"
     return command
