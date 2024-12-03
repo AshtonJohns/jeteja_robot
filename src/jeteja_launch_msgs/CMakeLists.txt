@@ -8,18 +8,20 @@ endif()
 
 # Find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(sensor_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 
 # Specify message files
 set(msg_files
   "msg/PwmSignals.msg"
+  "msg/PreprocessedImage.msg"
 )
 
 # Generate interfaces
 rosidl_generate_interfaces(${PROJECT_NAME}
   ${msg_files}
-  DEPENDENCIES builtin_interfaces
+  DEPENDENCIES builtin_interfaces sensor_msgs
 )
 
 # Export runtime dependencies
