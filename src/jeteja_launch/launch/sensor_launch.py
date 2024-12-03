@@ -141,14 +141,7 @@ def generate_launch_description():
     ]
 
     autopilot_nodes = [
-        # Node(  # autopilot_control_handler node
-        #     package='jeteja_launch',
-        #     executable='',
-        #     name='',
-        #     output='screen',
-        #     parameters=[],
-
-        # ),
+        
         Node(  # image_to_processed_image node
             package='jeteja_launch',
             executable='image_to_processed_image',
@@ -157,15 +150,23 @@ def generate_launch_description():
             parameters=[autopilot_config],
             condition=IfCondition(LaunchConfiguration('autopilot'))
         ),
-        # Node(  # autopilot_control_handler node
-        #     package='jeteja_launch',
-        #     executable='',
-        #     name='',
-        #     output='screen',
-        #     parameters=[],
-
-        # ), 
-
+        Node(  # autopilot_inference_handler node
+            package='jeteja_launch',
+            executable='autopilot_inference_handler',
+            name='autopilot_inference_handler',
+            output='screen',
+            parameters=[],
+            condition=IfCondition(LaunchConfiguration('autopilot'))
+        ),
+        Node(  # autopilot_control_handler node
+            package='jeteja_launch',
+            executable='autopilot_control_handler',
+            name='autopilot_control_handler',
+            output='screen',
+            parameters=[],
+            condition=IfCondition(LaunchConfiguration('autopilot'))
+        ),
+        
     ]
 
     # Instructional message to display the control mappings
