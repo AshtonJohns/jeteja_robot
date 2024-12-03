@@ -11,7 +11,7 @@ from time import sleep
 
 # SETUP
 # Load configs
-params_file_path = os.path.join(os.path.dirname(sys.path[0]), 'config_new.json')
+params_file_path = os.path.join(os.path.dirname(sys.path[0]), 'test_config.json')
 params_file = open(params_file_path)
 params = json.load(params_file)
 # Constants
@@ -23,7 +23,7 @@ THROTTLE_STALL = params['throttle_stall']
 THROTTLE_FWD_RANGE = params['throttle_fwd_range']
 THROTTLE_REV_RANGE = params['throttle_rev_range']
 THROTTLE_LIMIT = params['throttle_limit']
-STOP_BUTTON = params['stop_btn_x'] # 'X' button emergency stop
+STOP_BUTTON = params['stop_btn'] # 'X' button emergency stop
 # Init serial port
 ser_pico = serial.Serial(port='/dev/ttyACM0', baudrate=115200)
 print(f"Pico is connected to port: {ser_pico.name}")

@@ -5,34 +5,43 @@ Read dutycycle in nanoseconds via USB BUS.
 import sys
 import select
 from time import sleep
-from machine import Pin, PWM
+from machine import Pin, PWM, reset
 
 # SETUP
-steering = PWM(Pin(16))
+steering = PWM(Pin(0))
+
 steering.freq(50)
 throttle = PWM(Pin(15))
 throttle.freq(50)
-sleep(3)  # ESC calibrate
-poller = select.poll()
-poller.register(sys.stdin, select.POLLIN)
-event = poller.poll()
+led = Pin('LED')
+
 
 # LOOP
 try:
+    led.toggle()
+    sleep(3)  # ESC calibrate
+    poller = select.poll()
+    poller.register(sys.stdin, select.POLLIN)
+    print("I'm listening...")
+    event = poller.poll()
+
     while True:
         # read data from serial
+        
         for msg, _ in event:
             buffer = msg.readline().rstrip().split(',')
+            # print(buffer) # debug
+            # print(len(buffer)) # debug
             if len(buffer) == 2:
                 ns_st, ns_th = int(buffer[0]), int(buffer[1])
+                if ns_st == ns_th == 'END':
+                    break
+                print(ns_st, ns_th) # debug
                 steering.duty_ns(ns_st)
                 throttle.duty_ns(ns_th)
+
 except:
-    pass
+    led.toggle()
 finally:
-    throttle.duty_ns(1210000)
-    sleep(1)
-    throttle.deinit()
-    steering.duty_ns(1500000)
-    sleep(1)
-    steering.deinit()
+    print('Pico reset')
+    reset()

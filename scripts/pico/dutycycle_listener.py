@@ -5,7 +5,7 @@ Read dutycycle in nanoseconds via USB BUS.
 import sys
 import select
 from time import sleep
-from machine import Pin, PWM
+from machine import Pin, PWM, reset
 
 # SETUP
 steering = PWM(Pin(0))
@@ -33,8 +33,14 @@ try:
             # print(len(buffer)) # debug
             if len(buffer) == 2:
                 ns_st, ns_th = int(buffer[0]), int(buffer[1])
+                if ns_st == ns_th == 'END':
+                    break
                 print(ns_st, ns_th) # debug
                 steering.duty_ns(ns_st)
                 throttle.duty_ns(ns_th)
+
 except:
     led.toggle()
+finally:
+    print('Pico reset')
+    reset()
