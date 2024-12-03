@@ -1,27 +1,16 @@
-autopilot_control_handler:
-  ros__parameters:
-    COLOR_NORMALIZATION_FACTOR: 255.0 # For uint8 images
-    COLOR_DATA_TYPE: "uint8" # If altered, include changes in the code
-    COLOR_ENCODING: 'rgb8'
-    DEPTH_NORMALIZATION_FACTOR: 65535.0 # For uint16 images
-    COLOR_DATA_TYPE: "uint16" # If alterend, include changes in the code
-    DEPTH_ENCODING: 'mono16'
+COLOR_NORMALIZATION_FACTOR: 255.0 # For uint8 images
+COLOR_DATA_TYPE: "uint8" # If altered, include changes in the code
+COLOR_ENCODING: 'rgb8'
+COLOR_CHANNELS: 3
 
-autopilot_inference_handler:
-  ros__parameters:
-    COLOR_NORMALIZATION_FACTOR: 255.0 # For uint8 images
-    COLOR_DATA_TYPE: "uint8" # If altered, include changes in the code
-    COLOR_ENCODING: 'rgb8'
-    DEPTH_NORMALIZATION_FACTOR: 65535.0 # For uint16 images
-    COLOR_DATA_TYPE: "uint16" # If alterend, include changes in the code
-    DEPTH_ENCODING: 'mono16'
+DEPTH_NORMALIZATION_FACTOR: 65535.0 # For uint16 images
+DEPTH_DATA_TYPE: "uint16" # If alterend, include changes in the code
+DEPTH_ENCODING: 'mono16'
+DEPTH_CHANNELS: 1
 
-image_to_processed_image:
-  ros__parameters:
-    COLOR_NORMALIZATION_FACTOR: 255.0 # For uint8 images
-    COLOR_DATA_TYPE: "uint8" # If altered, include changes in the code
-    COLOR_ENCODING: 'rgb8'
-    DEPTH_NORMALIZATION_FACTOR: 65535.0 # For uint16 images
-    COLOR_DATA_TYPE: "uint16" # If alterend, include changes in the code
-    DEPTH_ENCODING: 'mono16'
+BATCH_SIZE: 1
+OUTPUT_SHAPE: "12" # (1,2)
+COLOR_INPUT_IDX: 0 # TODO
+DEPTH_INPUT_IDX: 0 # TODO
+OUTPUT_IDX: 2 # TODO
 
