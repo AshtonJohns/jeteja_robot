@@ -28,6 +28,13 @@ def generate_launch_description():
     )
 
     # Paths to helper scripts and other launch files
+    autopilot_config = join(
+        get_package_share_directory('jeteja_launch'),
+        'config',
+        'autopilot.yaml'
+    )
+
+
     teleop_config = join(
         get_package_share_directory('jeteja_launch'),
         'config',
@@ -52,12 +59,6 @@ def generate_launch_description():
         'realsense2_camera.yaml'
     )
 
-    remote_control_handler_config = join(
-        get_package_share_directory('jeteja_launch'),
-        'config',
-        'remote_control_handler.yaml'
-    )
-
     realsense2_camera_launch_path = join(
         get_package_share_directory('realsense2_camera'),
         'launch',
@@ -74,20 +75,6 @@ def generate_launch_description():
 
     # Shared nodes between 'manual' and 'autopilot' arguments
     shared_nodes = [
-
-        Node(   # cmd_vel_fixed_rate node
-            package='jeteja_launch',
-            executable='cmd_vel_fixed_rate',
-            name='cmd_vel_fixed_rate',
-            output='screen',
-            condition=IfCondition(LaunchConfiguration('manual'))
-        ),
-
-        Node(
-            package='jeteja_launch',
-            executable='cmd_vel_to_pwm',
-            name='cmd_vel_to_pwm'
-        ),
 
         DeclareLaunchArgument(  # teleop config
             'teleop_config_filepath',
@@ -127,6 +114,20 @@ def generate_launch_description():
     ]
 
     manual_nodes = [
+        Node(   # cmd_vel_fixed_rate node
+            package='jeteja_launch',
+            executable='cmd_vel_fixed_rate',
+            name='cmd_vel_fixed_rate',
+            output='screen',
+            condition=IfCondition(LaunchConfiguration('manual'))
+        ),
+
+        Node(
+            package='jeteja_launch',
+            executable='cmd_vel_to_pwm',
+            name='cmd_vel_to_pwm',
+            condition=IfCondition(LaunchConfiguration('manual'))
+        ),
             Node(   # remote_control_handler node
             package='jeteja_launch',
             executable='remote_control_handler',
@@ -136,6 +137,34 @@ def generate_launch_description():
             # parameters=[remote_control_handler_config],
             condition=IfCondition(LaunchConfiguration('manual'))
         ),
+
+    ]
+
+    autopilot_nodes = [
+        # Node(  # autopilot_control_handler node
+        #     package='jeteja_launch',
+        #     executable='',
+        #     name='',
+        #     output='screen',
+        #     parameters=[],
+
+        # ),
+        Node(  # image_to_processed_image node
+            package='jeteja_launch',
+            executable='image_to_processed_image',
+            name='image_to_processed_image',
+            output='screen',
+            parameters=[autopilot_config],
+            condition=IfCondition(LaunchConfiguration('autopilot'))
+        ),
+        # Node(  # autopilot_control_handler node
+        #     package='jeteja_launch',
+        #     executable='',
+        #     name='',
+        #     output='screen',
+        #     parameters=[],
+
+        # ), 
 
     ]
 
@@ -182,6 +211,8 @@ def generate_launch_description():
         # --- NODES ---
 
         *shared_nodes, # Shared nodes between autopilot and manual modes
+
+        *autopilot_nodes, # Nodes strictly for autopilot control
 
         *manual_nodes, # Nodes strictly for manual control
 

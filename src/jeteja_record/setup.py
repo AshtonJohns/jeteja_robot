@@ -13,8 +13,7 @@ setup(
         ('share/' + package_name + '/config', ['config/topics.yaml']), 
     ],
     install_requires=[
-        'setuptools',         
-        'opencv-python',       
+        'setuptools',       
         'launch', 
         'launch_ros', 
         'rclpy'

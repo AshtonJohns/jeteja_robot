@@ -1,0 +1,27 @@
+autopilot_control_handler:
+  ros__parameters:
+    COLOR_NORMALIZATION_FACTOR: 255.0 # For uint8 images
+    COLOR_DATA_TYPE: "uint8" # If altered, include changes in the code
+    COLOR_ENCODING: 'rgb8'
+    DEPTH_NORMALIZATION_FACTOR: 65535.0 # For uint16 images
+    COLOR_DATA_TYPE: "uint16" # If alterend, include changes in the code
+    DEPTH_ENCODING: 'mono16'
+
+autopilot_inference_handler:
+  ros__parameters:
+    COLOR_NORMALIZATION_FACTOR: 255.0 # For uint8 images
+    COLOR_DATA_TYPE: "uint8" # If altered, include changes in the code
+    COLOR_ENCODING: 'rgb8'
+    DEPTH_NORMALIZATION_FACTOR: 65535.0 # For uint16 images
+    COLOR_DATA_TYPE: "uint16" # If alterend, include changes in the code
+    DEPTH_ENCODING: 'mono16'
+
+image_to_processed_image:
+  ros__parameters:
+    COLOR_NORMALIZATION_FACTOR: 255.0 # For uint8 images
+    COLOR_DATA_TYPE: "uint8" # If altered, include changes in the code
+    COLOR_ENCODING: 'rgb8'
+    DEPTH_NORMALIZATION_FACTOR: 65535.0 # For uint16 images
+    COLOR_DATA_TYPE: "uint16" # If alterend, include changes in the code
+    DEPTH_ENCODING: 'mono16'
+
