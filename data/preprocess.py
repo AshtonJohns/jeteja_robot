@@ -1,4 +1,5 @@
 import tensorflow as tf
+import yaml
 import glob
 import os
 import pandas as pd
@@ -6,19 +7,73 @@ import cv2
 import numpy as np
 from utils.file_utilities import get_latest_directory
 from sklearn.model_selection import train_test_split
+from ament_index_python.packages import get_package_share_directory
 
-# Constants for normalization
-COLOR_NORMALIZATION_FACTOR = 255.0  # For uint8 images
-DEPTH_NORMALIZATION_FACTOR = 65535.0  # For uint16 images
+realsense2_camera_config = os.path.join(
+    get_package_share_directory('jeteja_launch'),
+    'config',
+    'realsense2_camera.yaml'
+)
 
-# Define motor and steering normalization constants based on their ranges
-MOTOR_PWM_MIN = 3277
-MOTOR_PWM_MAX = 6553
-STEERING_PWM_MIN = 3277
-STEERING_PWM_MAX = 6553
+autopilot_config = os.path.join(
+    get_package_share_directory('jeteja_launch'),
+    'config',
+    'autopilot.yaml'
+)
 
-MOTOR_PWM_NORMALIZATION_FACTOR = MOTOR_PWM_MAX - MOTOR_PWM_MIN
-STEERING_PWM_NORMALIZATION_FACTOR = STEERING_PWM_MAX - STEERING_PWM_MIN
+remote_control_handler_config = os.path.join(
+    get_package_share_directory('jeteja_launch'),
+    'config',
+    'remote_control_handler.yaml'
+)
+
+with open(remote_control_handler_config, 'r') as file:
+    config = yaml.safe_load(file)
+
+MOTOR_MIN_DUTY_CYLE = config.get('motor_min_duty_cycle')
+MOTOR_NEUTRAL_DUTY_CYCLE = config.get('motor_neutral_duty_cycle')
+MOTOR_MAX_DUTY_CYCLE = config.get('motor_max_duty_cycle')
+
+STEERING_MIN_DUTY_CYCLE = config.get('steering_min_duty_cycle')
+STEERING_NEUTRAL_DUTY_CYCLE = config.get('steering_neutral_duty_cycle')
+STEERING_MAX_DUTY_CYCLE = config.get('steering_max_duty_cycle')
+
+# Parse the realsense camera YAML file
+with open(realsense2_camera_config, 'r') as file:
+    config = yaml.safe_load(file)
+
+# Color camera settings
+COLOR_HEIGHT = config['rgb_camera.color_profile'].split("x")[0]
+COLOR_WIDTH = config['rgb_camera.color_profile'].split("x")[1]
+COLOR_FORMAT = config['rgb_camera.color_format']
+
+DEPTH_HEIGHT = config['depth_module.depth_profile'].split("x")[0]
+DEPTH_WIDTH = config['depth_module.depth_profile'].split("x")[1]
+COLOR_FORMAT = config['depth_module.depth_format']
+
+# Parse the autopilot YAML file
+with open(autopilot_config, 'r') as file:
+    config = yaml.safe_load(file)
+
+# Extract parameters from the YAML configuration
+COLOR_NORMALIZATION_FACTOR = config.get('COLOR_NORMALIZATION_FACTOR')
+COLOR_DATA_TYPE = config.get('COLOR_DATA_TYPE')
+COLOR_ENCODING = config.get('COLOR_ENCODING')
+COLOR_INPUT_IDX = config.get('COLOR_INPUT_IDX')
+
+DEPTH_NORMALIZATION_FACTOR = config.get('DEPTH_NORMALIZATION_FACTOR')
+DEPTH_DATA_TYPE = config.get('DEPTH_DATA_TYPE')
+DEPTH_ENCODING = config.get('DEPTH_ENCODING')
+DEPTH_INPUT_IDX = config.get('DEPTH_INPUT_IDX')
+
+BATCH_SIZE = config.get('BATCH_SIZE')
+OUTPUT_IDX = config.get('OUTPUT_IDX')
+COLOR_CHANNELS = config['COLOR_CHANNELS']
+DEPTH_CHANNELS = config['DEPTH_CHANNELS']
+OUTPUT_SHAPE = config['OUTPUT_SHAPE']
+
+MOTOR_PWM_NORMALIZATION_FACTOR = MOTOR_MAX_DUTY_CYCLE - MOTOR_MIN_DUTY_CYLE
+STEERING_PWM_NORMALIZATION_FACTOR = STEERING_MAX_DUTY_CYCLE - STEERING_MIN_DUTY_CYCLE
 
 
 
@@ -127,9 +182,9 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
                 continue
 
             # Validate image types
-            if color_image.dtype != np.uint8:
+            if color_image.dtype != COLOR_DATA_TYPE:
                 raise Exception(f"Color image is not uint8. Found: {color_image.dtype}")
-            if depth_image.dtype != np.uint16:
+            if depth_image.dtype != DEPTH_DATA_TYPE:
                 raise Exception(f"Depth image is not uint16. Found: {depth_image.dtype}")
 
             # Normalize color image to [0, 1]
@@ -142,8 +197,8 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
                 depth_image = np.expand_dims(depth_image, axis=-1)  # Add channel dimension
 
             # Normalize PWM values to [0, 1]
-            motor_pwm_normalized = (row['motor_pwm'] - MOTOR_PWM_MIN) / MOTOR_PWM_NORMALIZATION_FACTOR
-            steering_pwm_normalized = (row['steering_pwm'] - STEERING_PWM_MIN) / STEERING_PWM_NORMALIZATION_FACTOR
+            motor_pwm_normalized = (row['motor_pwm'] - MOTOR_MIN_DUTY_CYLE) / MOTOR_PWM_NORMALIZATION_FACTOR
+            steering_pwm_normalized = (row['steering_pwm'] - STEERING_MIN_DUTY_CYCLE) / STEERING_PWM_NORMALIZATION_FACTOR
             # Debugging
             print(f"Color image range: {color_image.min()} to {color_image.max()}")
             print(f"Depth image range: {depth_image.min()} to {depth_image.max()}")

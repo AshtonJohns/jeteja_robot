@@ -1,4 +1,5 @@
 import os
+import yaml
 import pandas as pd
 import tensorflow as tf
 import matplotlib.pyplot as plt
@@ -7,6 +8,53 @@ from tensorflow.keras.models import Model
 from tensorflow.keras import mixed_precision
 from utils.file_utilities import get_latest_directory
 from utils.training_utilities import write_run_trt_optimizer_script, write_savedmodel_to_onnx_script
+from ament_index_python.packages import get_package_share_directory
+
+realsense2_camera_config = os.path.join(
+    get_package_share_directory('jeteja_launch'),
+    'config',
+    'realsense2_camera.yaml'
+)
+
+autopilot_config = os.path.join(
+    get_package_share_directory('jeteja_launch'),
+    'config',
+    'autopilot.yaml'
+)
+
+# Parse the realsense camera YAML file
+with open(realsense2_camera_config, 'r') as file:
+    config = yaml.safe_load(file)
+
+# Color camera settings
+COLOR_HEIGHT = config['rgb_camera.color_profile'].split("x")[0]
+COLOR_WIDTH = config['rgb_camera.color_profile'].split("x")[1]
+COLOR_FORMAT = config['rgb_camera.color_format']
+
+DEPTH_HEIGHT = config['depth_module.depth_profile'].split("x")[0]
+DEPTH_WIDTH = config['depth_module.depth_profile'].split("x")[1]
+COLOR_FORMAT = config['depth_module.depth_format']
+
+# Parse the autopilot YAML file
+with open(autopilot_config, 'r') as file:
+    config = yaml.safe_load(file)
+
+# Extract parameters from the YAML configuration
+COLOR_NORMALIZATION_FACTOR = config.get('COLOR_NORMALIZATION_FACTOR')
+COLOR_DATA_TYPE = config.get('COLOR_DATA_TYPE')
+COLOR_ENCODING = config.get('COLOR_ENCODING')
+COLOR_INPUT_IDX = config.get('COLOR_INPUT_IDX')
+
+DEPTH_NORMALIZATION_FACTOR = config.get('DEPTH_NORMALIZATION_FACTOR')
+DEPTH_DATA_TYPE = config.get('DEPTH_DATA_TYPE')
+DEPTH_ENCODING = config.get('DEPTH_ENCODING')
+DEPTH_INPUT_IDX = config.get('DEPTH_INPUT_IDX')
+
+BATCH_SIZE = config.get('BATCH_SIZE')
+OUTPUT_IDX = config.get('OUTPUT_IDX')
+COLOR_CHANNELS = config['COLOR_CHANNELS']
+DEPTH_CHANNELS = config['DEPTH_CHANNELS']
+OUTPUT_SHAPE = config['OUTPUT_SHAPE']
 
 # Enable memory growth
 physical_gpus = tf.config.list_physical_devices('GPU')
@@ -27,15 +75,11 @@ policy = mixed_precision.Policy('mixed_float16')
 mixed_precision.set_global_policy(policy)
 
 # DATA TYPES # TODO update this
+if DEPTH_DATA_TYPE == 'uint16':
+    DEPTH_DATA_TYPE = tf.uint16
+if COLOR_DATA_TYPE == 'uint8':
+    COLOR_DATA_TYPE = tf.uint8
 PWM_DATA_TYPE = tf.float32
-COLOR_DATA_TYPE = tf.uint8
-DEPTH_DATA_TYPE = tf.uint16
-
-# DIMENSIONS
-COLOR_WIDTH = 360
-COLOR_LENGTH = 640
-DEPTH_WIDTH = 360
-DEPTH_LENGTH = 640
 
 # Paths
 processed_data_dir = os.path.join('data', 'processed_data')
@@ -56,8 +100,8 @@ def parse_tfrecord(example_proto):
     feature_description = {
         'color_image': tf.io.FixedLenFeature([], tf.string),
         'depth_image': tf.io.FixedLenFeature([], tf.string),
-        'motor_pwm': tf.io.FixedLenFeature([], tf.float32),  # Use float32 if normalized
-        'steering_pwm': tf.io.FixedLenFeature([], tf.float32),  # Use float32 if normalized
+        'motor_pwm': tf.io.FixedLenFeature([], PWM_DATA_TYPE),  # Use float32 if normalized
+        'steering_pwm': tf.io.FixedLenFeature([], PWM_DATA_TYPE),  # Use float32 if normalized
     }
     parsed_features = tf.io.parse_single_example(example_proto, feature_description)
 
@@ -66,8 +110,8 @@ def parse_tfrecord(example_proto):
     depth_image = tf.io.decode_raw(parsed_features['depth_image'], tf.float32)
 
     # Reshape images to their correct dimensions
-    color_image = tf.reshape(color_image, (COLOR_WIDTH, COLOR_LENGTH, 3))
-    depth_image = tf.reshape(depth_image, (DEPTH_WIDTH, DEPTH_LENGTH, 1))
+    color_image = tf.reshape(color_image, (COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS))
+    depth_image = tf.reshape(depth_image, (DEPTH_WIDTH, DEPTH_HEIGHT, DEPTH_CHANNELS))
 
     # Motor and Steering PWM are already normalized to [0, 1] during serialization
     motor_pwm = parsed_features['motor_pwm']
@@ -99,7 +143,7 @@ def prepare_dataset(tfrecord_path, batch_size, shuffle=True):
 # Create the model
 def create_model():
     # Color input and features
-    color_input = Input(shape=(COLOR_WIDTH, COLOR_LENGTH, 3), name='color_input')  # Color has 3 channels
+    color_input = Input(shape=(COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS), name='color_input')  # Color has 3 channels
     color_features = layers.Conv2D(64, (3, 3), activation='relu')(color_input)
     color_features = layers.MaxPooling2D((2, 2))(color_features)
     color_features = layers.Conv2D(128, (3, 3), activation='relu')(color_features)
@@ -108,7 +152,7 @@ def create_model():
     color_features = layers.Dense(512, activation='relu')(color_features)
 
     # Depth input and features
-    depth_input = Input(shape=(DEPTH_WIDTH, DEPTH_LENGTH, 1), name='depth_input')  # Corrected to 1 channel
+    depth_input = Input(shape=(DEPTH_WIDTH, DEPTH_HEIGHT, DEPTH_CHANNELS), name='depth_input')  # Corrected to 1 channel
     depth_features = layers.Conv2D(64, (3, 3), activation='relu')(depth_input)
     depth_features = layers.MaxPooling2D((2, 2))(depth_features)
     depth_features = layers.Conv2D(128, (3, 3), activation='relu')(depth_features)
@@ -134,8 +178,8 @@ def create_model():
 
 if __name__ == '__main__':
     # Training setup
-    batch_size = 16
-    epochs = 15
+    batch_size = 16 # TODO
+    epochs = 15 # TODO
 
     train_dataset = prepare_dataset(train_tfrecord, batch_size=batch_size, shuffle=True)
     val_dataset = prepare_dataset(val_tfrecord, batch_size=batch_size, shuffle=False)
@@ -180,7 +224,7 @@ if __name__ == '__main__':
     # Write bash scripts
     write_savedmodel_to_onnx_script(os.path.join(MODEL_DIR, 'convert_onnx.bash'))
 
-    write_run_trt_optimizer_script(COLOR_WIDTH, COLOR_LENGTH, DEPTH_WIDTH, DEPTH_LENGTH,
+    write_run_trt_optimizer_script(COLOR_WIDTH, COLOR_HEIGHT, DEPTH_WIDTH, DEPTH_HEIGHT,
                     os.path.join(MODEL_DIR, 'run_trt.bash'))
 
     history_df = pd.DataFrame(history.history)

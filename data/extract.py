@@ -12,6 +12,52 @@ from cv_bridge import CvBridge
 from rosbag2_py import SequentialReader, StorageOptions, ConverterOptions
 from rosidl_runtime_py.utilities import get_message
 
+realsense2_camera_config = os.path.join(
+    get_package_share_directory('jeteja_launch'),
+    'config',
+    'realsense2_camera.yaml'
+)
+
+autopilot_config = os.path.join(
+    get_package_share_directory('jeteja_launch'),
+    'config',
+    'autopilot.yaml'
+)
+
+# Parse the realsense camera YAML file
+with open(realsense2_camera_config, 'r') as file:
+    config = yaml.safe_load(file)
+
+# Color camera settings
+COLOR_HEIGHT = config['rgb_camera.color_profile'].split("x")[0]
+COLOR_WIDTH = config['rgb_camera.color_profile'].split("x")[1]
+COLOR_FORMAT = config['rgb_camera.color_format']
+
+DEPTH_HEIGHT = config['depth_module.depth_profile'].split("x")[0]
+DEPTH_WIDTH = config['depth_module.depth_profile'].split("x")[1]
+COLOR_FORMAT = config['depth_module.depth_format']
+
+# Parse the autopilot YAML file
+with open(autopilot_config, 'r') as file:
+    config = yaml.safe_load(file)
+
+# Extract parameters from the YAML configuration
+COLOR_NORMALIZATION_FACTOR = config.get('COLOR_NORMALIZATION_FACTOR')
+COLOR_DATA_TYPE = config.get('COLOR_DATA_TYPE')
+COLOR_ENCODING = config.get('COLOR_ENCODING')
+COLOR_INPUT_IDX = config.get('COLOR_INPUT_IDX')
+
+DEPTH_NORMALIZATION_FACTOR = config.get('DEPTH_NORMALIZATION_FACTOR')
+DEPTH_DATA_TYPE = config.get('DEPTH_DATA_TYPE')
+DEPTH_ENCODING = config.get('DEPTH_ENCODING')
+DEPTH_INPUT_IDX = config.get('DEPTH_INPUT_IDX')
+
+BATCH_SIZE = config.get('BATCH_SIZE')
+OUTPUT_IDX = config.get('OUTPUT_IDX')
+COLOR_CHANNELS = config['COLOR_CHANNELS']
+DEPTH_CHANNELS = config['DEPTH_CHANNELS']
+OUTPUT_SHAPE = config['OUTPUT_SHAPE']
+
 
 def extract_rosbag(bag_files, output_dir):
     """
@@ -64,7 +110,7 @@ def extract_rosbag(bag_files, output_dir):
             # Process color images
             if topic == '/camera/camera/color/image_raw':
                 image_msg = deserialize_message(msg_data, get_message(type_map[topic]))
-                cv_image = bridge.imgmsg_to_cv2(image_msg, desired_encoding='bgr8')
+                cv_image = bridge.imgmsg_to_cv2(image_msg, desired_encoding=COLOR_ENCODING)
                 timestamp_str = f"{image_msg.header.stamp.sec}_{image_msg.header.stamp.nanosec}"
                 color_image_filename = os.path.join(color_images_dir, f"color_{timestamp_str}.jpg")
                 cv2.imwrite(color_image_filename, cv_image)
@@ -72,7 +118,7 @@ def extract_rosbag(bag_files, output_dir):
             # Process depth images
             elif topic == '/camera/camera/depth/image_rect_raw':
                 depth_msg = deserialize_message(msg_data, get_message(type_map[topic]))
-                depth_image = bridge.imgmsg_to_cv2(depth_msg, desired_encoding='passthrough')
+                depth_image = bridge.imgmsg_to_cv2(depth_msg, desired_encoding=DEPTH_ENCODING)
                 timestamp_str = f"{depth_msg.header.stamp.sec}_{depth_msg.header.stamp.nanosec}"
                 depth_image_filename = os.path.join(depth_images_dir, f"depth_{timestamp_str}.png")
                 cv2.imwrite(depth_image_filename, depth_image)
@@ -106,59 +152,10 @@ def extract_rosbag(bag_files, output_dir):
                         'intensities': list(scan_msg.intensities)
                     }, scan_file)
 
-            # # Process camera info (color and depth) # TODO use 'ros2 topic echo /camera/color/camera_info and /camera/depth/camera_info to get the correct members (not capitals)
-            # elif topic == '/camera/color/camera_info':
-            #     camera_info_msg = deserialize_message(msg_data, get_message(type_map[topic]))
-            #     camera_info_filename = os.path.join(output_dir, f"color_camera_info.yaml")
-            #     with open(camera_info_filename, 'w') as camera_info_file:
-            #         yaml.dump({
-            #             'width': camera_info_msg.width,
-            #             'height': camera_info_msg.height,
-            #             'K': list(camera_info_msg.K),
-            #             'D': list(camera_info_msg.D),
-            #             'distortion_model': camera_info_msg.distortion_model,
-            #         }, camera_info_file)
-
-            # elif topic == '/camera/depth/camera_info':
-            #     camera_info_msg = deserialize_message(msg_data, get_message(type_map[topic]))
-            #     camera_info_filename = os.path.join(output_dir, f"depth_camera_info.yaml")
-            #     with open(camera_info_filename, 'w') as camera_info_file:
-            #         yaml.dump({
-            #             'width': camera_info_msg.width,
-            #             'height': camera_info_msg.height,
-            #             'K': list(camera_info_msg.K),
-            #             'D': list(camera_info_msg.D),
-            #             'distortion_model': camera_info_msg.distortion_model,
-            #         }, camera_info_file)
-
-            # # Process metadata topics (if needed)
-            # elif topic in ['/camera/color/metadata', '/camera/depth/metadata']:
-            #     metadata_msg = deserialize_message(msg_data, get_message(type_map[topic]))
-            #     metadata_filename = os.path.join(output_dir, f"{topic.split('/')[-1]}_{metadata_msg.header.stamp.sec}.yaml")
-            #     with open(metadata_filename, 'w') as metadata_file:
-            #         yaml.dump({'data': str(metadata_msg)}, metadata_file)
-
-            # # Extrinsics (if needed)
-            # elif topic == '/camera/extrinsics/depth_to_color':
-            #     extrinsics_msg = deserialize_message(msg_data, get_message(type_map[topic]))
-            #     extrinsics_filename = os.path.join(output_dir, 'extrinsics.yaml')
-            #     with open(extrinsics_filename, 'w') as extrinsics_file:
-            #         yaml.dump({
-            #             'rotation': extrinsics_msg.rotation,
-            #             'translation': extrinsics_msg.translation
-            #         }, extrinsics_file)
-
     csv_file.close()
 
 
 def main():
-
-    # Path to the topics configuration file
-    config_path = os.path.join(
-        get_package_share_directory('jeteja_record'),
-        'config',
-        'topics.yaml'
-    )
 
     rosbag_dir = os.path.join('.', 'data', 'rosbags')
 
@@ -172,11 +169,6 @@ def main():
     db_file = get_files_from_directory(latest_dir) # NOTE in the case the user paused/resumed during data collection
 
     db_file = sort_files(db_file) # Maintain correct replay order
-    
-    # Load topics from the configuration file
-    with open(config_path, 'r') as file:
-        topics_config = yaml.safe_load(file)
-    topics = topics_config['topics']  # List of topics from YAML
 
     extract_rosbag(db_file, extracted_rosbag_dir)
 
