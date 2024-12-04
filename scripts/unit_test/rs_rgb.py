@@ -49,12 +49,17 @@ try:
             print("No frame received. TERMINATE!")
             break
         # Convert images to numpy arrays
+
         color_image = np.asanyarray(color_frame.get_data())
 
         # Show the stacked images
         cv2.imshow('RealSense', color_image)
 
-        # Exit the loop if 'q' is pressed
+        # Log frame rate
+        frame_counts += 1
+        since_start = time() - start_stamp
+        frame_rate = frame_counts / since_start
+        print(f"frame rate: {frame_rate}")
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
