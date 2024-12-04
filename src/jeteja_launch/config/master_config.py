@@ -94,8 +94,8 @@ if PWM_PREPROCESS_DATA_TYPE == 'float32':
 PWM_OUTPUT_IDX = config.get('PWM_OUTPUT_IDX')
 PWM_OUTPUT_SHAPE = tuple(config.get('PWM_OUTPUT_SHAPE'))  # Convert list to tuple
 PWM_OUTPUT_DATA_TYPE = config.get('PWM_OUTPUT_DATA_TYPE')
-# if PWM_OUTPUT_DATA_TYPE == 'float16':
-#     OUTPUT_DATA_TYPE = tf.float16
+if PWM_OUTPUT_DATA_TYPE == 'float16':
+    PWM_OUTPUT_DATA_TYPE = np.float16
 OUTPUT_ORIGINAL_DATA_TYPE = config.get('OUTPUT_ORIGINAL_DATA_TYPE')
 
 BATCH_SIZE = config.get('BATCH_SIZE')
