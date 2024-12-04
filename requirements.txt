@@ -7,3 +7,4 @@ mpremote
 scikit-learn
 tf2onnx
 pycuda
+pyyaml
