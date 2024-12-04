@@ -24,11 +24,19 @@ class ImageToRosMsg(object):
         color_img = kwargs.get('color',False)
         depth_img = kwargs.get('depth',False)
         if color_img:
-            return image.astype(COLOR_PREPROCESS_DATA_TYPE) / COLOR_NORMALIZATION_FACTOR
+            image =  (image / COLOR_NORMALIZATION_FACTOR).astype(COLOR_PREPROCESS_DATA_TYPE)
         elif depth_img:
-            return image.astype(DEPTH_PREPROCESS_DATA_TYPE) / DEPTH_NORMALIZATION_FACTOR
+            image = (image / DEPTH_NORMALIZATION_FACTOR).astype(DEPTH_PREPROCESS_DATA_TYPE)
+        return image
 
-    def bridge_imgmsg_to_cv2(self, msg, desired_encoding):
+    def bridge_imgmsg_to_cv2(self, msg, **kwargs):
+        """"""
+        is_color = kwargs.get('is_color',False)
+        is_depth = kwargs.get('is_depth',False)
+        if is_color:
+            desired_encoding = COLOR_ENCODING
+        elif is_depth:
+            desired_encoding = DEPTH_ENCODING
         return self.bridge.imgmsg_to_cv2(msg, desired_encoding)
     
     def convert_image_array_to_ros_image_msg(self, image, **kwargs):
@@ -44,7 +52,6 @@ class ImageToRosMsg(object):
                 (image * COLOR_NORMALIZATION_FACTOR).astype(COLOR_DATA_TYPE), 
                 encoding=COLOR_ENCODING)
         
-        print(f"TO ROS: After Conversion - Min: {image.min()}, Max: {image.max()}, Shape: {image.shape}")
         return image
 
 def image_msg_to_numpy(image_msg): # TODO use config parameters
