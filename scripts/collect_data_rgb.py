@@ -37,14 +37,16 @@ try:
 except:
     ser_pico = serial.Serial(port='/dev/ttyACM0', baudrate=115200)
 
-# Initialize joystick and directories for saving data
+# Initialize Pygame for joystick handling
+pygame.init()
 pygame.joystick.init()
 js = pygame.joystick.Joystick(0)
 
+# Initialize storage for saving data
 data_dir = os.path.join('data', datetime.now().strftime("%Y-%m-%d-%H-%M"))
-rgb_image_dir = os.path.join(data_dir, 'rgb_images/')
+image_dir = os.path.join(data_dir, 'rgb_images/')
 label_path = os.path.join(data_dir, 'labels.csv')
-os.makedirs(rgb_image_dir, exist_ok=True)
+os.makedirs(image_dir, exist_ok=True)
 
 # Initialize RealSense camera pipeline for RGB only
 pipeline = rs.pipeline()
@@ -53,38 +55,42 @@ config.enable_stream(rs.stream.color, 224, 224, rs.format.rgb8, 30)  # BGR strea
 
 # Start streaming from the camera
 pipeline.start(config)
+for i in reversed(range(90)):
+    frames = pipeline.wait_for_frames()
+    # cv.imshow("Camera", frame)
+    # cv.waitKey(1)
+    if frames is None:
+        print("No frame received. TERMINATE!")
+        sys.exit()
+    if not i % 30:
+        print(i/30)  # count down 3, 2, 1 sec
+# Init timer for FPS computing
+start_stamp = time()
+frame_counts = 0
+frame_rate = 0.
 
 # Initialize variables
 is_recording = False
-frame_counts = 0
+# frame_counts = 0
 ax_val_st = 0.
 ax_val_th = 0.
 
 # Initialize frame rate tracking for RGB
-prev_time_rgb = time()
-frame_count_rgb = 0
-fps_rgb = 0
+# prev_time_rgb = time()
+# frame_count_rgb = 0
+# fps_rgb = 0
 
-# Initialize Pygame for joystick handling
-pygame.init()
 
 try:
     while True:
         # Wait for a new set of frames from the camera
         frames = pipeline.wait_for_frames()
         color_frame = frames.get_color_frame()
-
-        if not color_frame:
-            continue  # Skip if frames are not ready
-
-        # Calculate RGB frame rate
-        frame_count_rgb += 1
-        current_time_rgb = time()
-        if current_time_rgb - prev_time_rgb >= 1.0:
-            fps_rgb = frame_count_rgb / (current_time_rgb - prev_time_rgb)
-            print(f"RGB Frame Rate: {fps_rgb:.2f} FPS")
-            prev_time_rgb = current_time_rgb
-            frame_count_rgb = 0
+        # Log frame rate
+        frame_counts += 1
+        since_start = time() - start_stamp
+        frame_rate = frame_counts / since_start
+        print(f"frame rate: {frame_rate:.2f} FPS")  # debug
 
         # Convert color frame to numpy array and resize to 120x160
         color_image = np.asanyarray(color_frame.get_data())
