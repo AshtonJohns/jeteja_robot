@@ -27,15 +27,15 @@ config.enable_stream(rs.stream.color, 424, 240, rs.format.rgb8, 30)
 
 # Start streaming
 pipeline.start(config)
-for i in reversed(range(180)):
+for i in reversed(range(30)):
     frames = pipeline.wait_for_frames()
     # cv.imshow("Camera", frame)
     # cv.waitKey(1)
     if frames is None:
         print("No frame received. TERMINATE!")
         sys.exit()
-    if not i % 60:
-        print(i/60)  # count down 3, 2, 1 sec
+    if not i % 30:
+        print(i/30)  # count down 3, 2, 1 sec
 
 # Init timer for FPS computing
 start_stamp = time()
