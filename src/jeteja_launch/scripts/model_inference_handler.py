@@ -1,4 +1,5 @@
 import pycuda.driver as cuda
+import pycuda.autoinit
 import tensorrt as trt
 import numpy as np
 import scripts.postprocessing as postprocessing
@@ -73,10 +74,6 @@ class TensorRTInference:
         print(f"Color Image: shape={color_image.shape}, dtype={color_image.dtype}, range=({color_image.min()}, {color_image.max()})")
         print(f"Depth Image: shape={depth_image.shape}, dtype={depth_image.dtype}, range=({depth_image.min()}, {depth_image.max()})")
 
-        # Prepare inputs
-        color_image = np.expand_dims(color_image, axis=0).astype(COLOR_PREPROCESS_DATA_TYPE)  # Add batch dimension
-        depth_image = np.expand_dims(depth_image, axis=0).astype(DEPTH_PREPROCESS_DATA_TYPE)  # Add batch dimension
-
         # Transfer data to device
         cuda.memcpy_htod(self.d_color_input, color_image)
         cuda.memcpy_htod(self.d_depth_input, depth_image)
@@ -93,6 +90,9 @@ class TensorRTInference:
         # Transfer output back to host
         cuda.memcpy_dtoh(self.h_output_0, self.d_output_0)
         cuda.memcpy_dtoh(self.h_output_1, self.d_output_1)
+
+        print(self.h_output_0)
+        print(self.h_output_1)
 
         return self.h_output_0, self.h_output_1
 
@@ -118,6 +118,10 @@ def main():
 
     print(f"Color Image: shape={color_image.shape}, dtype={color_image.dtype}, range=({color_image.min()}, {color_image.max()})")
     print(f"Depth Image: shape={depth_image.shape}, dtype={depth_image.dtype}, range=({depth_image.min()}, {depth_image.max()})")
+
+    # Prepare inputs
+    color_image = np.expand_dims(color_image, axis=0).astype(COLOR_PREPROCESS_DATA_TYPE)  # Add batch dimension
+    depth_image = np.expand_dims(depth_image, axis=0).astype(DEPTH_PREPROCESS_DATA_TYPE)  # Add batch dimension
 
     # Pass to inference method
     model = TensorRTInference()
