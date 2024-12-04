@@ -27,13 +27,17 @@ def calculate_steering_duty_cycle(value):
     
 def perform_safe_speed_check(speed, steering):
     if speed > MOTOR_MAX_DUTY_CYCLE:
+        print(f"Exceeded motor_pwm: {speed}")
         speed = MOTOR_MAX_DUTY_CYCLE
     elif speed < MOTOR_MIN_DUTY_CYCLE:
+        print(f"Low motor_pwm: {speed}")
         speed = MOTOR_MIN_DUTY_CYCLE
         
     if steering > STEERING_MAX_DUTY_CYCLE:
+        print(f"Exceeded steering_pwm: {speed}")
         steering = STEERING_MAX_DUTY_CYCLE
     elif steering < STEERING_MIN_DUTY_CYCLE:
+        print(f"Low steering_pwm: {speed}")
         steering = STEERING_MIN_DUTY_CYCLE
     
     return speed, steering
