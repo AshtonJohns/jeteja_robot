@@ -1,11 +1,19 @@
 import subprocess
 import serial
+import os
+from ament_index_python.packages import get_package_share_directory
+
+pico_main_path = os.path.join(
+    get_package_share_directory('jeteja_launch'),
+    'scripts',
+    'main.py',
+) 
 
 class PicoConnection(object):
-    def __init__(self, path) -> None:
+    def __init__(self) -> None:
         self.picohandler = PicoHandler()
         self.serialhandler = SerialConnectionHandler()
-        self.mainpy_path = path
+        self.mainpy_path = pico_main_path
         self.state_alive = False
 
     def connect(self):
