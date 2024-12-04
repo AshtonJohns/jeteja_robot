@@ -1,15 +1,5 @@
-buttons:
-  move_forward: 0      # Remap Button A
-  toggle_mode: 1       # Remap Button B
-  emergency_stop: 2    # Remap Button X
-  back_to_home: 3      # Remap Button Y
-
-axes:
-  speed_control: 1     # Remap left stick vertical axis
-  steering: 0          # Remap left stick horizontal axis
-  camera_tilt: 4       # Remap right stick vertical axis
-  camera_pan: 3        # Remap right stick horizontal axis
-
-settings:
-  deadzone: 0.1        # Ignore small joystick movements
-  autorepeat_rate: 20  # Repeat button presses (Hz)
+# keys = button name
+emergency_btn: 0
+pause_recording_btn: 1
+start_recording_btn: 8
+pico_start_btn: 9
