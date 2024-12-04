@@ -8,7 +8,7 @@ sudo nvpmodel -m 0
 sudo jetson_clocks  # Lock GPU and CPU frequencies
 
 # Run TensorRT execution with ONNX model and specified input shapes
-trtexec --onnx=model.onnx --saveEngine=model.trt --fp16 --shapes=color_input:1x{color_width}x{color_length}x3,depth_input:1x{depth_width}x{depth_length}x1
+trtexec --onnx=model.onnx --saveEngine=model.trt --fp16 --useSpinWait --dumpProfile --shapes=color_input:1x{color_width}x{color_length}x3,depth_input:1x{depth_width}x{depth_length}x1
 """
     # Write the content to the specified file
     with open(output_file, "w") as bash_file:
