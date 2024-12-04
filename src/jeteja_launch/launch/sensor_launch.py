@@ -142,10 +142,10 @@ def generate_launch_description():
 
     autopilot_nodes = [
         
-        Node(  # image_to_processed_image node
+        Node(  # autopilot_control_handler node
             package='jeteja_launch',
-            executable='image_to_processed_image',
-            name='image_to_processed_image',
+            executable='autopilot_control_handler',
+            name='autopilot_control_handler',
             output='screen',
             parameters=[],
             condition=IfCondition(LaunchConfiguration('autopilot'))
@@ -157,14 +157,6 @@ def generate_launch_description():
             output='screen',
             parameters=[],
             condition=IfCondition(LaunchConfiguration('autopilot')),
-        ),
-        Node(  # autopilot_control_handler node
-            package='jeteja_launch',
-            executable='autopilot_control_handler',
-            name='autopilot_control_handler',
-            output='screen',
-            parameters=[],
-            condition=IfCondition(LaunchConfiguration('autopilot'))
         ),
     ]
 
