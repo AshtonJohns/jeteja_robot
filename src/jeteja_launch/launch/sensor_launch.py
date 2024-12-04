@@ -76,16 +76,22 @@ def generate_launch_description():
     # Shared nodes between 'manual' and 'autopilot' arguments
     shared_nodes = [
 
+        Node(   # remote_control_handler node
+            package='jeteja_launch',
+            executable='remote_control_handler',
+            name='remote_control_handler',
+            output='screen',
+            parameters=[
+                {'manual': LaunchConfiguration('manual')},
+                {'autopilot': LaunchConfiguration('autopilot')},
+            ]
+            # parameters=[remote_control_handler_config],
+        ),
+
         DeclareLaunchArgument(  # teleop config
             'teleop_config_filepath',
             default_value=teleop_config,
             description='Path to the teleop_twist_joy configuration file'
-        ),
-
-        DeclareLaunchArgument(  # joy config
-            'joy_config_filepath',
-            default_value=joy_config,
-            description='Path to the joy configuration file'
         ),
 
         IncludeLaunchDescription(   # teleop launch
@@ -128,28 +134,11 @@ def generate_launch_description():
             name='cmd_vel_to_pwm',
             condition=IfCondition(LaunchConfiguration('manual'))
         ),
-            Node(   # remote_control_handler node
-            package='jeteja_launch',
-            executable='remote_control_handler',
-            name='remote_control_handler',
-            output='screen',
-            parameters=[],
-            # parameters=[remote_control_handler_config],
-            condition=IfCondition(LaunchConfiguration('manual'))
-        ),
 
     ]
 
     autopilot_nodes = [
         
-        Node(  # autopilot_control_handler node
-            package='jeteja_launch',
-            executable='autopilot_control_handler',
-            name='autopilot_control_handler',
-            output='screen',
-            parameters=[],
-            condition=IfCondition(LaunchConfiguration('autopilot'))
-        ),
         Node(   # autopilot_inference_handler node
             package='jeteja_launch',
             executable='autopilot_inference_handler',

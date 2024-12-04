@@ -1,12 +1,10 @@
-import os
 import traceback
 import rclpy
 import scripts.lower_control as lower_control
+import config.master_config as master_config
 from std_msgs.msg import String
 from rclpy.node import Node
-# from geometry_msgs.msg import Twist, TwistStamped
 from sensor_msgs.msg import Joy
-from ament_index_python.packages import get_package_share_directory
 from scripts.pico_handler import PicoConnection
 from jeteja_launch_msgs.msg import PwmSignals
 
@@ -14,16 +12,25 @@ class RemoteControlHandler(Node):
     def __init__(self):
         super().__init__('remote_control_handler')
 
-        # Get main.py path for pico 
-        pico_port_script_path = os.path.join(
-                get_package_share_directory('jeteja_launch'),
-                'scripts',
-                'main.py'
-            )
+        # Run 'manual' or 'autopilot' mode
+        self.declare_parameter('manual', False)
+        self.declare_parameter('autopilot', False)
+
+        manual_mode = self.get_parameter('manual').value
+        autopilot_mode = self.get_parameter('autopilot').value
+
+        self.get_logger().info(f"Manual mode: {manual_mode}")
+        self.get_logger().info(f"Autopilot mode: {autopilot_mode}")
+
+        self.manual_mode = False
+        self.autopilot_mode = False
+        self.mode_discovery(manual_mode,autopilot_mode)
+
+        # Master configs
+        self.button_mapping = master_config.JOY_CONTROLLER_CONFIG_MAP
         
         # Pico and serial communication process execution
-        self.get_logger().info(pico_port_script_path)
-        self.pico_execute = PicoConnection(pico_port_script_path)
+        self.pico_execute = PicoConnection()
 
         # State variables (True == alive, False == dead)
         self.recording_state = False
@@ -43,25 +50,41 @@ class RemoteControlHandler(Node):
         self.joy_subscription = self.create_subscription(Joy, '/joy', self.joy_callback, 10)
         self.recording_status_pub = self.create_publisher(String, '/recording_status', 10)
 
-    def joy_callback(self, joy_msg):
-        emergency_button = joy_msg.buttons[0]
-        pause_recording = joy_msg.buttons[1]
-        pico_start_button = joy_msg.buttons[9]
-        start_recording = joy_msg.buttons[8]
+    def mode_discovery(self, manual_mode, autopilot_mode):
+        if manual_mode and autopilot_mode:
+            raise Exception("You cannot run in both manual and autopilot modes.")
+        elif manual_mode:
+            self.manual_mode = True
+        elif autopilot_mode:
+            self.autopilot_mode = True
+        else:
+            raise Exception("You must run either manual or autopilot modes.")
 
-        if emergency_button == 1:
+    def get_button_names(self, joy_msg:Joy):
+        btn_names = []
+        for btn_name, btn_idx in self.button_mapping.items():
+            if joy_msg.buttons[btn_idx]:
+                btn_names.append(btn_name)
+        return btn_names
+
+    def joy_callback(self, joy_msg):
+        enabled_btns = self.get_button_names(joy_msg)
+
+        # self.get_logger().info(" ".join(enabled_btns))
+
+        if "emergency_btn" in enabled_btns:
             self.get_logger().info("Emergency buttoned pressed")
             self.pico_execute.close()
         
-        elif pause_recording == 1:
+        elif "pause_recording_btn" in enabled_btns:
             self.get_logger().info("Pause button pressed")
             self.handle_pause()
 
-        elif start_recording == 1:
+        elif "start_recording_btn" in enabled_btns:
             self.get_logger().info('Recording button pressed')
             self.handle_resume()
 
-        elif pico_start_button == 1:
+        elif "pico_start_btn" in enabled_btns:
             self.pico_enable_state = False
             self.get_logger().info("Pico start button pressed")
             self.start_lockout_timer(5, pico=True)
