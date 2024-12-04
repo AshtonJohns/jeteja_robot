@@ -27,7 +27,7 @@ config.enable_stream(rs.stream.color, 424, 240, rs.format.rgb8, 30)
 
 # Start streaming
 pipeline.start(config)
-for i in reversed(range(30)):
+for i in reversed(range(90)):
     frames = pipeline.wait_for_frames()
     # cv.imshow("Camera", frame)
     # cv.waitKey(1)
