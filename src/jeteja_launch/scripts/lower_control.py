@@ -1,4 +1,4 @@
-import jeteja_launch.config.master_config as master_config
+import src.jeteja_launch.config.master_config as master_config
 
 MOTOR_NEUTRAL_DUTY_CYCLE = master_config.MOTOR_NEUTRAL_DUTY_CYCLE
 MOTOR_MAX_DUTY_CYCLE = master_config.MOTOR_MAX_DUTY_CYCLE
