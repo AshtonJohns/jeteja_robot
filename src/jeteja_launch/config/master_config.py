@@ -24,6 +24,12 @@ remote_control_handler_config = os.path.join(
     'remote_control_handler.yaml'
 )
 
+joy_controller_config = os.path.join(
+    get_package_share_directory('jeteja_launch'),
+    'config',
+    'joy.yaml',
+)
+
 
 ################# MOTOR CONFIG ################# # TODO
 
@@ -41,6 +47,12 @@ STEERING_MIN_DUTY_CYCLE = lower_control_config["steering_min_duty_cycle"]
 MOTOR_PWM_NORMALIZATION_FACTOR = MOTOR_MAX_DUTY_CYCLE - MOTOR_MIN_DUTY_CYCLE
 STEERING_PWM_NORMALIZATION_FACTOR = STEERING_MAX_DUTY_CYCLE - STEERING_MIN_DUTY_CYCLE
 
+
+################# CONTROLLER CONFIG #################
+with open(joy_controller_config, 'r') as file:
+    joy_controller_config = yaml.safe_load(file)
+
+JOY_CONTROLLER_CONFIG_MAP = joy_controller_config
 
 ################# REALSENSE #################
 with open(realsense2_camera_config, 'r') as file:
