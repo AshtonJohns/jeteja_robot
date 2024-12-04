@@ -1,16 +1,24 @@
+MODEL_PATH: /home/ucajetson/jeteja_robot/data/models/2024-12-01_19-12-58/model.trt
+BATCH_SIZE: 1
+
 COLOR_NORMALIZATION_FACTOR: 255.0 # For uint8 images
 COLOR_DATA_TYPE: "uint8" # If altered, include changes in the code
+COLOR_PREPROCESS_DATA_TYPE: 'float32'
 COLOR_ENCODING: 'rgb8'
 COLOR_CHANNELS: 3
+COLOR_INPUT_IDX: 0 # TODO
 
 DEPTH_NORMALIZATION_FACTOR: 65535.0 # For uint16 images
 DEPTH_DATA_TYPE: "uint16" # If alterend, include changes in the code
+DEPTH_PREPROCESS_DATA_TYPE: 'float32'
 DEPTH_ENCODING: 'mono16'
 DEPTH_CHANNELS: 1
-
-BATCH_SIZE: 1
-OUTPUT_SHAPE: "12" # (1,2)
-COLOR_INPUT_IDX: 0 # TODO
 DEPTH_INPUT_IDX: 0 # TODO
-OUTPUT_IDX: 2 # TODO
+
+PWM_DATA_TYPE: 'int'
+PWM_PREPROCESS_DATA_TYPE: "float32"
+PWM_OUTPUT_DATA_TYPE: "float16" # matches mixed-precision
+PWM_OUTPUT_SHAPE: [1,2] # Tuple
+PWM_OUTPUT_IDX: 2 # TODO
+
 
