@@ -133,7 +133,8 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
             color_image = (color_image / COLOR_NORMALIZATION_FACTOR).astype(COLOR_PREPROCESS_DATA_TYPE)
 
             # Normalize depth image to range [0, 1]
-            depth_image = depth_image.astype(DEPTH_PREPROCESS_DATA_TYPE) / DEPTH_NORMALIZATION_FACTOR
+            # depth_image = depth_image.astype(DEPTH_PREPROCESS_DATA_TYPE) / DEPTH_NORMALIZATION_FACTOR
+            depth_image = (depth_image / DEPTH_NORMALIZATION_FACTOR).astype(DEPTH_PREPROCESS_DATA_TYPE)
 
             if len(depth_image.shape) == 2:
                 depth_image = np.expand_dims(depth_image, axis=-1)  # Add channel dimension

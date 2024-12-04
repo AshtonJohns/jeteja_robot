@@ -68,6 +68,8 @@ def extract_rosbag(bag_files, output_dir):
             if topic == '/camera/camera/color/image_raw':
                 image_msg = deserialize_message(msg_data, 
                                                 get_message(type_map[topic]))
+                print(COLOR_ENCODING)
+                print(image_msg.encoding)
                 cv_image = bridge.imgmsg_to_cv2(image_msg, 
                                                 desired_encoding=COLOR_ENCODING)
                 timestamp_str = f"{image_msg.header.stamp.sec}_{image_msg.header.stamp.nanosec}"
@@ -78,8 +80,10 @@ def extract_rosbag(bag_files, output_dir):
             elif topic == '/camera/camera/depth/image_rect_raw':
                 depth_msg = deserialize_message(msg_data, 
                                                 get_message(type_map[topic]))
+                print(DEPTH_ENCODING)
+                print(depth_msg.encoding)
                 depth_image = bridge.imgmsg_to_cv2(depth_msg, 
-                                                   desired_encoding=DEPTH_ENCODING)
+                                                   desired_encoding='16UC1')
                 timestamp_str = f"{depth_msg.header.stamp.sec}_{depth_msg.header.stamp.nanosec}"
                 depth_image_filename = os.path.join(depth_images_dir, f"depth_{timestamp_str}.png")
                 cv2.imwrite(depth_image_filename, depth_image)

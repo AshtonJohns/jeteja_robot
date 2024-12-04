@@ -16,7 +16,7 @@ COLOR_CHANNELS = master_config.COLOR_CHANNELS
 DEPTH_WIDTH = master_config.DEPTH_WIDTH
 DEPTH_HEIGHT = master_config.DEPTH_HEIGHT
 DEPTH_CHANNELS = master_config.DEPTH_CHANNELS
-PWM_DATA_TYPE = master_config.PWM_DATA_TYPE
+PWM_PREPROCESS_DATA_TYPE = master_config.PWM_PREPROCESS_DATA_TYPE
 PWM_OUTPUT_DATA_TYPE = master_config.PWM_OUTPUT_DATA_TYPE
 
 # Enable memory growth
@@ -57,14 +57,14 @@ def parse_tfrecord(example_proto):
     feature_description = {
         'color_image': tf.io.FixedLenFeature([], tf.string),
         'depth_image': tf.io.FixedLenFeature([], tf.string),
-        'motor_pwm': tf.io.FixedLenFeature([], PWM_DATA_TYPE),  # Use float32 if normalized
-        'steering_pwm': tf.io.FixedLenFeature([], PWM_DATA_TYPE),  # Use float32 if normalized
+        'motor_pwm': tf.io.FixedLenFeature([], PWM_PREPROCESS_DATA_TYPE),  # Use float32 if normalized
+        'steering_pwm': tf.io.FixedLenFeature([], PWM_PREPROCESS_DATA_TYPE),  # Use float32 if normalized
     }
     parsed_features = tf.io.parse_single_example(example_proto, feature_description)
 
     # Decode images from serialized bytes
-    color_image = tf.io.decode_raw(parsed_features['color_image'], PWM_DATA_TYPE)
-    depth_image = tf.io.decode_raw(parsed_features['depth_image'], PWM_DATA_TYPE)
+    color_image = tf.io.decode_raw(parsed_features['color_image'], PWM_PREPROCESS_DATA_TYPE)
+    depth_image = tf.io.decode_raw(parsed_features['depth_image'], PWM_PREPROCESS_DATA_TYPE)
 
     # Reshape images to their correct dimensions
     color_image = tf.reshape(color_image, (COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS))
