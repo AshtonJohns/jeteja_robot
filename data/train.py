@@ -1,5 +1,5 @@
 import os
-import yaml
+import numpy as np
 import pandas as pd
 import tensorflow as tf
 import matplotlib.pyplot as plt
@@ -34,7 +34,7 @@ else:
     raise Exception(f"No GPU detected for tensorflow {tf.__version__}.")
 
 # Enable mixed-precision training
-if PWM_OUTPUT_DATA_TYPE == 'float16':
+if PWM_OUTPUT_DATA_TYPE == np.float16:
     policy = mixed_precision.Policy('mixed_float16')
     mixed_precision.set_global_policy(policy)
 
