@@ -1,6 +1,7 @@
 import pyrealsense2 as rs
 import numpy as np
 import cv2
+from time import time
 
 # Configure depth and color streams
 pipeline = rs.pipeline()
