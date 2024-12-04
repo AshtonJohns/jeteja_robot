@@ -147,16 +147,16 @@ def generate_launch_description():
             executable='image_to_processed_image',
             name='image_to_processed_image',
             output='screen',
-            parameters=[autopilot_config],
+            parameters=[],
             condition=IfCondition(LaunchConfiguration('autopilot'))
         ),
-        Node(  # autopilot_inference_handler node
+        Node(   # autopilot_inference_handler node
             package='jeteja_launch',
             executable='autopilot_inference_handler',
             name='autopilot_inference_handler',
             output='screen',
             parameters=[],
-            condition=IfCondition(LaunchConfiguration('autopilot'))
+            condition=IfCondition(LaunchConfiguration('autopilot')),
         ),
         Node(  # autopilot_control_handler node
             package='jeteja_launch',
@@ -166,7 +166,6 @@ def generate_launch_description():
             parameters=[],
             condition=IfCondition(LaunchConfiguration('autopilot'))
         ),
-        
     ]
 
     # Instructional message to display the control mappings

@@ -1,8 +1,8 @@
 import os
-import glob
 import cv2
 import csv
 import yaml
+import src.jeteja_launch.config.master_config as  master_config
 from utils.file_utilities import get_files_from_directory, get_latest_directory, sort_files
 from ament_index_python.packages import get_package_share_directory
 from rclpy.serialization import deserialize_message
@@ -12,51 +12,8 @@ from cv_bridge import CvBridge
 from rosbag2_py import SequentialReader, StorageOptions, ConverterOptions
 from rosidl_runtime_py.utilities import get_message
 
-realsense2_camera_config = os.path.join(
-    get_package_share_directory('jeteja_launch'),
-    'config',
-    'realsense2_camera.yaml'
-)
-
-autopilot_config = os.path.join(
-    get_package_share_directory('jeteja_launch'),
-    'config',
-    'autopilot.yaml'
-)
-
-# Parse the realsense camera YAML file
-with open(realsense2_camera_config, 'r') as file:
-    config = yaml.safe_load(file)
-
-# Color camera settings
-COLOR_HEIGHT = config['rgb_camera.color_profile'].split("x")[0]
-COLOR_WIDTH = config['rgb_camera.color_profile'].split("x")[1]
-COLOR_FORMAT = config['rgb_camera.color_format']
-
-DEPTH_HEIGHT = config['depth_module.depth_profile'].split("x")[0]
-DEPTH_WIDTH = config['depth_module.depth_profile'].split("x")[1]
-COLOR_FORMAT = config['depth_module.depth_format']
-
-# Parse the autopilot YAML file
-with open(autopilot_config, 'r') as file:
-    config = yaml.safe_load(file)
-
-# Extract parameters from the YAML configuration
-COLOR_NORMALIZATION_FACTOR = config.get('COLOR_NORMALIZATION_FACTOR')
-COLOR_DATA_TYPE = config.get('COLOR_DATA_TYPE')
-COLOR_ENCODING = config.get('COLOR_ENCODING')
-COLOR_INPUT_IDX = config.get('COLOR_INPUT_IDX')
-
-DEPTH_NORMALIZATION_FACTOR = config.get('DEPTH_NORMALIZATION_FACTOR')
-DEPTH_DATA_TYPE = config.get('DEPTH_DATA_TYPE')
-DEPTH_ENCODING = config.get('DEPTH_ENCODING')
-DEPTH_INPUT_IDX = config.get('DEPTH_INPUT_IDX')
-
-BATCH_SIZE = config.get('BATCH_SIZE')
-OUTPUT_IDX = config.get('OUTPUT_IDX')
-COLOR_CHANNELS = config['COLOR_CHANNELS']
-DEPTH_CHANNELS = config['DEPTH_CHANNELS']
-OUTPUT_SHAPE = config['OUTPUT_SHAPE']
+COLOR_ENCODING = master_config.COLOR_ENCODING
+DEPTH_ENCODING = master_config.DEPTH_ENCODING
 
 
 def extract_rosbag(bag_files, output_dir):
@@ -109,16 +66,20 @@ def extract_rosbag(bag_files, output_dir):
 
             # Process color images
             if topic == '/camera/camera/color/image_raw':
-                image_msg = deserialize_message(msg_data, get_message(type_map[topic]))
-                cv_image = bridge.imgmsg_to_cv2(image_msg, desired_encoding=COLOR_ENCODING)
+                image_msg = deserialize_message(msg_data, 
+                                                get_message(type_map[topic]))
+                cv_image = bridge.imgmsg_to_cv2(image_msg, 
+                                                desired_encoding=COLOR_ENCODING)
                 timestamp_str = f"{image_msg.header.stamp.sec}_{image_msg.header.stamp.nanosec}"
                 color_image_filename = os.path.join(color_images_dir, f"color_{timestamp_str}.jpg")
                 cv2.imwrite(color_image_filename, cv_image)
 
             # Process depth images
             elif topic == '/camera/camera/depth/image_rect_raw':
-                depth_msg = deserialize_message(msg_data, get_message(type_map[topic]))
-                depth_image = bridge.imgmsg_to_cv2(depth_msg, desired_encoding=DEPTH_ENCODING)
+                depth_msg = deserialize_message(msg_data, 
+                                                get_message(type_map[topic]))
+                depth_image = bridge.imgmsg_to_cv2(depth_msg, 
+                                                   desired_encoding=DEPTH_ENCODING)
                 timestamp_str = f"{depth_msg.header.stamp.sec}_{depth_msg.header.stamp.nanosec}"
                 depth_image_filename = os.path.join(depth_images_dir, f"depth_{timestamp_str}.png")
                 cv2.imwrite(depth_image_filename, depth_image)

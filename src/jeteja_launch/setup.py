@@ -12,6 +12,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/config', ['config/autopilot.yaml']),
         ('share/' + package_name + '/config', ['config/joy.yaml']),
+        ('share/' + package_name + '/config', ['config/master_config.py']),
         ('share/' + package_name + '/config', ['config/realsense2_camera.yaml']),
         ('share/' + package_name + '/config', ['config/remote_control_handler.yaml']),
         ('share/' + package_name + '/config', ['config/teleop_twist_joy.yaml']),
@@ -43,6 +44,7 @@ setup(
             'cmd_vel_to_pwm = jeteja_launch.cmd_vel_to_pwm:main',
             'image_to_processed_image = jeteja_launch.image_to_processed_image:main',
             'autopilot_control_handler = jeteja_launch.autopilot_control_handler:main',
+            'autopilot_inference_handler = jeteja_launch.autopilot_inference_handler:main',
         ],
     },
 )

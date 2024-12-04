@@ -1,10 +1,6 @@
 import os
-import numpy as np
-import cv2
-import pyrealsense2 as rs
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist
 from std_msgs.msg import String
 import scripts.lower_control as lower_control
 from scripts.pico_handler import PicoConnection

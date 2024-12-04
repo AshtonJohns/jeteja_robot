@@ -1,23 +1,11 @@
-import os
-import yaml
-from ament_index_python.packages import get_package_share_directory
+import jeteja_launch.config.master_config as master_config
 
-remote_control_handler_config = os.path.join(
-    get_package_share_directory('jeteja_launch'),
-    'config',
-    'remote_control_handler.yaml'
-    )
-
-with open(remote_control_handler_config, 'r') as file:
-    lower_control_config = yaml.safe_load(file)
-
-MOTOR_NEUTRAL_DUTY_CYCLE = lower_control_config["motor_neutral_duty_cycle"]
-MOTOR_MAX_DUTY_CYCLE = lower_control_config["motor_max_duty_cycle"]
-MOTOR_MIN_DUTY_CYCLE = lower_control_config["motor_min_duty_cycle"]
-
-STEERING_NEUTRAL_DUTY_CYCLE = lower_control_config["steering_neutral_duty_cycle"]
-STEERING_MAX_DUTY_CYCLE = lower_control_config["steering_max_duty_cycle"]
-STEERING_MIN_DUTY_CYCLE = lower_control_config["steering_min_duty_cycle"]
+MOTOR_NEUTRAL_DUTY_CYCLE = master_config.MOTOR_NEUTRAL_DUTY_CYCLE
+MOTOR_MAX_DUTY_CYCLE = master_config.MOTOR_MAX_DUTY_CYCLE
+MOTOR_MIN_DUTY_CYCLE = master_config.MOTOR_MIN_DUTY_CYCLE
+STEERING_NEUTRAL_DUTY_CYCLE = master_config.STEERING_NEUTRAL_DUTY_CYCLE
+STEERING_MAX_DUTY_CYCLE = master_config.STEERING_MAX_DUTY_CYCLE
+STEERING_MIN_DUTY_CYCLE = master_config.STEERING_MIN_DUTY_CYCLE
 
 def calculate_motor_duty_cycle(value):
     """cmd velocity to pwm motor duty"""

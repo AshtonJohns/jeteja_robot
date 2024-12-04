@@ -1,106 +1,133 @@
-import yaml
-import os
 import pycuda.driver as cuda
-import pycuda.autoinit
 import tensorrt as trt
 import numpy as np
-from ament_index_python.packages import get_package_share_directory
+import scripts.postprocessing as postprocessing
+import config.master_config as master_config
 
-realsense2_camera_config = os.path.join(
-    get_package_share_directory('jeteja_launch'),
-    'config',
-    'realsense2_camera.yaml'
-)
-
-autopilot_config = os.path.join(
-    get_package_share_directory('jeteja_launch'),
-    'config',
-    'autopilot.yaml'
-)
-
-# Parse the realsense camera YAML file
-with open(realsense2_camera_config, 'r') as file:
-    config = yaml.safe_load(file)
-
-# Color camera settings
-COLOR_HEIGHT = config['rgb_camera.color_profile'].split("x")[0]
-COLOR_WIDTH = config['rgb_camera.color_profile'].split("x")[1]
-COLOR_FORMAT = config['rgb_camera.color_format']
-
-DEPTH_HEIGHT = config['depth_module.depth_profile'].split("x")[0]
-DEPTH_WIDTH = config['depth_module.depth_profile'].split("x")[1]
-COLOR_FORMAT = config['depth_module.depth_format']
-
-# Parse the autopilot YAML file
-with open(autopilot_config, 'r') as file:
-    config = yaml.safe_load(file)
-
-# Extract parameters from the YAML configuration
-COLOR_NORMALIZATION_FACTOR = config.get('COLOR_NORMALIZATION_FACTOR')
-COLOR_DATA_TYPE = config.get('COLOR_DATA_TYPE')
-COLOR_ENCODING = config.get('COLOR_ENCODING')
-COLOR_INPUT_IDX = config.get('COLOR_INPUT_IDX')
-
-DEPTH_NORMALIZATION_FACTOR = config.get('DEPTH_NORMALIZATION_FACTOR')
-DEPTH_DATA_TYPE = config.get('DEPTH_DATA_TYPE')
-DEPTH_ENCODING = config.get('DEPTH_ENCODING')
-DEPTH_INPUT_IDX = config.get('DEPTH_INPUT_IDX')
-
-BATCH_SIZE = config.get('BATCH_SIZE')
-OUTPUT_IDX = config.get('OUTPUT_IDX')
-COLOR_CHANNELS = config['COLOR_CHANNELS']
-DEPTH_CHANNELS = config['DEPTH_CHANNELS']
-OUTPUT_SHAPE = config['OUTPUT_SHAPE']
+MODEL_PATH = master_config.MODEL_PATH
+COLOR_PREPROCESS_DATA_TYPE = master_config.COLOR_PREPROCESS_DATA_TYPE
+DEPTH_PREPROCESS_DATA_TYPE = master_config.DEPTH_PREPROCESS_DATA_TYPE
+PWM_OUTPUT_DATA_TYPE = master_config.PWM_OUTPUT_DATA_TYPE
 
 class TensorRTInference:
-    def __init__(self, trt_model_path):
+    def __init__(self):
+        model_path = MODEL_PATH
+        print(f"Loading TensorRT model from: {model_path}")
         self.logger = trt.Logger(trt.Logger.WARNING)
-        with open(trt_model_path, 'rb') as f:
+
+        # Load the TensorRT engine
+        with open(model_path, 'rb') as f:
             runtime = trt.Runtime(self.logger)
             self.engine = runtime.deserialize_cuda_engine(f.read())
         self.context = self.engine.create_execution_context()
 
-        # # Binding indices based on your model's TensorRT engine
-        # self.color_input_idx = 0
-        # self.depth_input_idx = 1
-        # self.output_idx = 2
+        # Inspect and map bindings
+        self.bindings = {}
+        self.binding_shapes = {}
+        self.binding_types = {}
+        self._inspect_bindings()
 
-        # Buffer sizes
-        self.color_input_shape = (BATCH_SIZE, COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS)
-        self.depth_input_shape = (BATCH_SIZE, DEPTH_WIDTH, DEPTH_HEIGHT, DEPTH_CHANNELS)
-        self.output_shape = OUTPUT_SHAPE
-
-        self.color_input_size = np.prod(self.color_input_shape) * np.float32(1).nbytes
-        self.depth_input_size = np.prod(self.depth_input_shape) * np.float32(1).nbytes
-        self.output_size = np.prod(self.output_shape) * np.float32(1).nbytes
+        # Input and output bindings
+        self.color_input_idx = self.bindings.get('color_input')
+        self.depth_input_idx = self.bindings.get('depth_input')
+        self.output_0_idx = self.bindings.get('output_0')
+        self.output_1_idx = self.bindings.get('output_1')
 
         # Allocate memory on GPU
-        self.d_color_input = cuda.mem_alloc(int(self.color_input_size))
-        self.d_depth_input = cuda.mem_alloc(int(self.depth_input_size))
-        self.d_output = cuda.mem_alloc(int(self.output_size))
+        self.d_color_input = cuda.mem_alloc(
+            int(np.prod(self.binding_shapes['color_input']) * COLOR_PREPROCESS_DATA_TYPE(1).nbytes)
+        )
+        self.d_depth_input = cuda.mem_alloc(
+            int(np.prod(self.binding_shapes['depth_input']) * DEPTH_PREPROCESS_DATA_TYPE(1).nbytes)
+        )
+        self.d_output_0 = cuda.mem_alloc(
+            int(np.prod(self.binding_shapes['output_0']) * PWM_OUTPUT_DATA_TYPE(1).nbytes)
+        )
+        self.d_output_1 = cuda.mem_alloc(
+            int(np.prod(self.binding_shapes['output_1']) * PWM_OUTPUT_DATA_TYPE(1).nbytes)
+        )
 
-        # Host output buffer
-        self.h_output = np.empty(self.output_shape, dtype=np.float32)
+        # Host buffers for outputs
+        self.h_output_0 = np.empty(self.binding_shapes['output_0'], dtype=PWM_OUTPUT_DATA_TYPE)
+        self.h_output_1 = np.empty(self.binding_shapes['output_1'], dtype=PWM_OUTPUT_DATA_TYPE)
 
+    def _inspect_bindings(self):
+        """Inspect engine bindings and populate binding information."""
+        print("Inspecting TensorRT Engine Bindings:")
+        for idx in range(self.engine.num_io_tensors):
+            tensor_name = self.engine.get_tensor_name(idx)
+            tensor_shape = self.engine.get_tensor_shape(tensor_name)
+            tensor_dtype = self.engine.get_tensor_dtype(tensor_name)
+            self.bindings[tensor_name] = idx
+            self.binding_shapes[tensor_name] = tensor_shape
+            self.binding_types[tensor_name] = tensor_dtype
+
+            print(f"Binding {idx}:")
+            print(f"  Name: {tensor_name}")
+            print(f"  Shape: {tensor_shape}")
+            print(f"  Data Type: {tensor_dtype}")
 
     def infer(self, color_image, depth_image):
+        """Run inference on input images."""
+
+        print(f"Color Image: shape={color_image.shape}, dtype={color_image.dtype}, range=({color_image.min()}, {color_image.max()})")
+        print(f"Depth Image: shape={depth_image.shape}, dtype={depth_image.dtype}, range=({depth_image.min()}, {depth_image.max()})")
+
         # Prepare inputs
-        color_image = np.expand_dims(color_image, axis=0).astype(np.float32)  # Add batch dimension
-        depth_image = np.expand_dims(depth_image, axis=0).astype(np.float32)  # Add batch dimension
+        color_image = np.expand_dims(color_image, axis=0).astype(COLOR_PREPROCESS_DATA_TYPE)  # Add batch dimension
+        depth_image = np.expand_dims(depth_image, axis=0).astype(DEPTH_PREPROCESS_DATA_TYPE)  # Add batch dimension
 
         # Transfer data to device
         cuda.memcpy_htod(self.d_color_input, color_image)
         cuda.memcpy_htod(self.d_depth_input, depth_image)
 
         # Perform inference
-        bindings = [int(self.d_color_input), int(self.d_depth_input), int(self.d_output)]
+        bindings = [None] * self.engine.num_io_tensors
+        bindings[self.color_input_idx] = int(self.d_color_input)
+        bindings[self.depth_input_idx] = int(self.d_depth_input)
+        bindings[self.output_0_idx] = int(self.d_output_0)
+        bindings[self.output_1_idx] = int(self.d_output_1)
+
         self.context.execute_v2(bindings)
 
         # Transfer output back to host
-        cuda.memcpy_dtoh(self.h_output, self.d_output)
+        cuda.memcpy_dtoh(self.h_output_0, self.d_output_0)
+        cuda.memcpy_dtoh(self.h_output_1, self.d_output_1)
 
-        return self.h_output
+        return self.h_output_0, self.h_output_1
 
+COLOR_WIDTH = master_config.COLOR_WIDTH
+COLOR_HEIGHT = master_config.COLOR_HEIGHT
+COLOR_CHANNELS = master_config.COLOR_CHANNELS
+COLOR_PREPROCESS_DATA_TYPE = master_config.COLOR_PREPROCESS_DATA_TYPE
+COLOR_NORMALIZATION_FACTOR = master_config.COLOR_NORMALIZATION_FACTOR
+DEPTH_WIDTH = master_config.DEPTH_WIDTH
+DEPTH_HEIGHT = master_config.DEPTH_HEIGHT
+DEPTH_CHANNELS = master_config.DEPTH_CHANNELS
+DEPTH_PREPROCESS_DATA_TYPE = master_config.DEPTH_PREPROCESS_DATA_TYPE
+DEPTH_NORMALIZATION_FACTOR = master_config.DEPTH_NORMALIZATION_FACTOR
 
-if __name__ == '__main__':
-    TensorRTInference('model.trt')
+def main():
+    # Generate test data for color_image (shape: (360, 640, 3))
+    color_image = np.random.rand(COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS).astype(COLOR_PREPROCESS_DATA_TYPE)
+    color_image /= COLOR_NORMALIZATION_FACTOR  # Normalize to [0, 1], if applicable to your preprocessing
+
+    # Generate test data for depth_image (shape: (360, 640, 1))
+    depth_image = np.random.rand(DEPTH_WIDTH, DEPTH_HEIGHT, DEPTH_CHANNELS).astype(DEPTH_PREPROCESS_DATA_TYPE)
+    depth_image /= DEPTH_NORMALIZATION_FACTOR  # Normalize to [0, 1], if applicable to your preprocessing
+
+    print(f"Color Image: shape={color_image.shape}, dtype={color_image.dtype}, range=({color_image.min()}, {color_image.max()})")
+    print(f"Depth Image: shape={depth_image.shape}, dtype={depth_image.dtype}, range=({depth_image.min()}, {depth_image.max()})")
+
+    # Pass to inference method
+    model = TensorRTInference()
+    outputs = model.infer(color_image, depth_image)
+
+    speed, steering = postprocessing.denormalize_pwm(outputs)
+
+    print(f"Output 0: {speed}")
+    print(f"Output 1: {steering}")
+
+if __name__ == "__main__":
+    main()
+

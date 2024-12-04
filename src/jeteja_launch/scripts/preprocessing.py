@@ -1,55 +1,17 @@
-import os
-import yaml
 import numpy as np
-from ament_index_python.packages import get_package_share_directory
+import config.master_config as master_config
 from cv_bridge import CvBridge
 
-realsense2_camera_config = os.path.join(
-    get_package_share_directory('jeteja_launch'),
-    'config',
-    'realsense2_camera.yaml'
-)
-
-autopilot_config = os.path.join(
-    get_package_share_directory('jeteja_launch'),
-    'config',
-    'autopilot.yaml'
-)
-
-# Parse the realsense camera YAML file
-with open(realsense2_camera_config, 'r') as file:
-    config = yaml.safe_load(file)
-
-# Color camera settings
-COLOR_HEIGHT = config['rgb_camera.color_profile'].split("x")[0]
-COLOR_WIDTH = config['rgb_camera.color_profile'].split("x")[1]
-COLOR_FORMAT = config['rgb_camera.color_format']
-
-DEPTH_HEIGHT = config['depth_module.depth_profile'].split("x")[0]
-DEPTH_WIDTH = config['depth_module.depth_profile'].split("x")[1]
-COLOR_FORMAT = config['depth_module.depth_format']
-
-# Parse the autopilot YAML file
-with open(autopilot_config, 'r') as file:
-    config = yaml.safe_load(file)
-
-# Extract parameters from the YAML configuration
-COLOR_NORMALIZATION_FACTOR = config.get('COLOR_NORMALIZATION_FACTOR')
-COLOR_DATA_TYPE = config.get('COLOR_DATA_TYPE')
-COLOR_ENCODING = config.get('COLOR_ENCODING')
-COLOR_INPUT_IDX = config.get('COLOR_INPUT_IDX')
-
-DEPTH_NORMALIZATION_FACTOR = config.get('DEPTH_NORMALIZATION_FACTOR')
-DEPTH_DATA_TYPE = config.get('DEPTH_DATA_TYPE')
-DEPTH_ENCODING = config.get('DEPTH_ENCODING')
-DEPTH_INPUT_IDX = config.get('DEPTH_INPUT_IDX')
-
-BATCH_SIZE = config.get('BATCH_SIZE')
-OUTPUT_IDX = config.get('OUTPUT_IDX')
-COLOR_CHANNELS = config['COLOR_CHANNELS']
-DEPTH_CHANNELS = config['DEPTH_CHANNELS']
-OUTPUT_SHAPE = config['OUTPUT_SHAPE']
-
+COLOR_NORMALIZATION_FACTOR = master_config.COLOR_NORMALIZATION_FACTOR
+COLOR_DATA_TYPE = master_config.COLOR_DATA_TYPE
+COLOR_ENCODING = master_config.COLOR_ENCODING
+COLOR_CHANNELS = master_config.COLOR_CHANNELS
+COLOR_PREPROCESS_DATA_TYPE = master_config.COLOR_PREPROCESS_DATA_TYPE
+DEPTH_NORMALIZATION_FACTOR = master_config.DEPTH_NORMALIZATION_FACTOR
+DEPTH_DATA_TYPE = master_config.DEPTH_DATA_TYPE
+DEPTH_ENCODING = master_config.DEPTH_ENCODING
+DEPTH_CHANNELS = master_config.DEPTH_CHANNELS
+DEPTH_PREPROCESS_DATA_TYPE = master_config.DEPTH_PREPROCESS_DATA_TYPE
 
 class ImageToRosMsg(object):
     def __init__(self) -> None:
@@ -62,9 +24,9 @@ class ImageToRosMsg(object):
         color_img = kwargs.get('color',False)
         depth_img = kwargs.get('depth',False)
         if color_img:
-            return image.astype(np.float32) / COLOR_NORMALIZATION_FACTOR
+            return image.astype(COLOR_PREPROCESS_DATA_TYPE) / COLOR_NORMALIZATION_FACTOR
         elif depth_img:
-            return image.astype(np.float32) / DEPTH_NORMALIZATION_FACTOR
+            return image.astype(DEPTH_PREPROCESS_DATA_TYPE) / DEPTH_NORMALIZATION_FACTOR
 
     def bridge_imgmsg_to_cv2(self, msg, desired_encoding):
         return self.bridge.imgmsg_to_cv2(msg, desired_encoding)
@@ -73,17 +35,19 @@ class ImageToRosMsg(object):
         """"""
         color_img = kwargs.get('color',False)
         depth_img = kwargs.get('depth', False)
-        encoding = kwargs.get('encoding', False)
         if depth_img:
-            return self.bridge.cv2_to_imgmsg(
+            image = self.bridge.cv2_to_imgmsg(
                     (image * DEPTH_NORMALIZATION_FACTOR).astype(DEPTH_DATA_TYPE), 
-                    encoding=encoding)
+                    encoding=DEPTH_ENCODING)
         elif color_img:
-            return self.bridge.cv2_to_imgmsg(
+            image = self.bridge.cv2_to_imgmsg(
                 (image * COLOR_NORMALIZATION_FACTOR).astype(COLOR_DATA_TYPE), 
-                encoding=encoding)
+                encoding=COLOR_ENCODING)
+        
+        print(f"TO ROS: After Conversion - Min: {image.min()}, Max: {image.max()}, Shape: {image.shape}")
+        return image
 
-def image_msg_to_numpy(image_msg):
+def image_msg_to_numpy(image_msg): # TODO use config parameters
     """
     Converts a sensor_msgs/Image to a NumPy array.
 
@@ -94,10 +58,28 @@ def image_msg_to_numpy(image_msg):
         numpy.ndarray: The image as a NumPy array.
     """
     image_encoding = image_msg.encoding
+    print(f"Image Encoding: {image_encoding}")
+    print(f"Image Data Size: {len(image_msg.data)}")
+    print(f"Image Height: {image_msg.height}, Image Width: {image_msg.width}")
+
     if image_encoding in COLOR_ENCODING:
-        dtype = np.uint16
+        dtype = COLOR_DATA_TYPE
+        channels = COLOR_CHANNELS
     elif image_encoding in DEPTH_ENCODING:
-        dtype = np.int16
+        dtype = DEPTH_DATA_TYPE
+        channels = DEPTH_CHANNELS
+
+    # Convert buffer to NumPy array
     image = np.frombuffer(image_msg.data, dtype=dtype)
-    return image.reshape((image_msg.height, image_msg.width, -1))
+    print(f"Image NumPy Array Size: {image.size}")
+
+    # Validate array size before reshaping
+    expected_size = image_msg.height * image_msg.width * channels
+    if image.size != expected_size:
+        raise ValueError(f"Cannot reshape array of size {image.size} into shape "
+                         f"({image_msg.height}, {image_msg.width}, {channels})")
+
+    # Reshape into correct dimensions
+    return image.reshape((image_msg.height, image_msg.width, channels))
+
 

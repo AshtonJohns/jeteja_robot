@@ -3,58 +3,21 @@ import yaml
 import pandas as pd
 import tensorflow as tf
 import matplotlib.pyplot as plt
+import src.jeteja_launch.config.master_config as master_config
 from tensorflow.keras import layers, models, Input
 from tensorflow.keras.models import Model
 from tensorflow.keras import mixed_precision
 from utils.file_utilities import get_latest_directory
 from utils.training_utilities import write_run_trt_optimizer_script, write_savedmodel_to_onnx_script
-from ament_index_python.packages import get_package_share_directory
 
-realsense2_camera_config = os.path.join(
-    get_package_share_directory('jeteja_launch'),
-    'config',
-    'realsense2_camera.yaml'
-)
-
-autopilot_config = os.path.join(
-    get_package_share_directory('jeteja_launch'),
-    'config',
-    'autopilot.yaml'
-)
-
-# Parse the realsense camera YAML file
-with open(realsense2_camera_config, 'r') as file:
-    config = yaml.safe_load(file)
-
-# Color camera settings
-COLOR_HEIGHT = config['rgb_camera.color_profile'].split("x")[0]
-COLOR_WIDTH = config['rgb_camera.color_profile'].split("x")[1]
-COLOR_FORMAT = config['rgb_camera.color_format']
-
-DEPTH_HEIGHT = config['depth_module.depth_profile'].split("x")[0]
-DEPTH_WIDTH = config['depth_module.depth_profile'].split("x")[1]
-COLOR_FORMAT = config['depth_module.depth_format']
-
-# Parse the autopilot YAML file
-with open(autopilot_config, 'r') as file:
-    config = yaml.safe_load(file)
-
-# Extract parameters from the YAML configuration
-COLOR_NORMALIZATION_FACTOR = config.get('COLOR_NORMALIZATION_FACTOR')
-COLOR_DATA_TYPE = config.get('COLOR_DATA_TYPE')
-COLOR_ENCODING = config.get('COLOR_ENCODING')
-COLOR_INPUT_IDX = config.get('COLOR_INPUT_IDX')
-
-DEPTH_NORMALIZATION_FACTOR = config.get('DEPTH_NORMALIZATION_FACTOR')
-DEPTH_DATA_TYPE = config.get('DEPTH_DATA_TYPE')
-DEPTH_ENCODING = config.get('DEPTH_ENCODING')
-DEPTH_INPUT_IDX = config.get('DEPTH_INPUT_IDX')
-
-BATCH_SIZE = config.get('BATCH_SIZE')
-OUTPUT_IDX = config.get('OUTPUT_IDX')
-COLOR_CHANNELS = config['COLOR_CHANNELS']
-DEPTH_CHANNELS = config['DEPTH_CHANNELS']
-OUTPUT_SHAPE = config['OUTPUT_SHAPE']
+COLOR_WIDTH = master_config.COLOR_WIDTH
+COLOR_HEIGHT = master_config.COLOR_HEIGHT
+COLOR_CHANNELS = master_config.COLOR_CHANNELS
+DEPTH_WIDTH = master_config.DEPTH_WIDTH
+DEPTH_HEIGHT = master_config.DEPTH_HEIGHT
+DEPTH_CHANNELS = master_config.DEPTH_CHANNELS
+PWM_DATA_TYPE = master_config.PWM_DATA_TYPE
+PWM_OUTPUT_DATA_TYPE = master_config.PWM_OUTPUT_DATA_TYPE
 
 # Enable memory growth
 physical_gpus = tf.config.list_physical_devices('GPU')
@@ -68,18 +31,12 @@ if physical_gpus:
     except RuntimeError as e:
         print(e)
 else:
-    print("No GPUs detected!")
+    raise Exception(f"No GPU detected for tensorflow {tf.__version__}.")
 
 # Enable mixed-precision training
-policy = mixed_precision.Policy('mixed_float16')
-mixed_precision.set_global_policy(policy)
-
-# DATA TYPES # TODO update this
-if DEPTH_DATA_TYPE == 'uint16':
-    DEPTH_DATA_TYPE = tf.uint16
-if COLOR_DATA_TYPE == 'uint8':
-    COLOR_DATA_TYPE = tf.uint8
-PWM_DATA_TYPE = tf.float32
+if PWM_OUTPUT_DATA_TYPE == 'float16':
+    policy = mixed_precision.Policy('mixed_float16')
+    mixed_precision.set_global_policy(policy)
 
 # Paths
 processed_data_dir = os.path.join('data', 'processed_data')
@@ -106,8 +63,8 @@ def parse_tfrecord(example_proto):
     parsed_features = tf.io.parse_single_example(example_proto, feature_description)
 
     # Decode images from serialized bytes
-    color_image = tf.io.decode_raw(parsed_features['color_image'], tf.float32)
-    depth_image = tf.io.decode_raw(parsed_features['depth_image'], tf.float32)
+    color_image = tf.io.decode_raw(parsed_features['color_image'], PWM_DATA_TYPE)
+    depth_image = tf.io.decode_raw(parsed_features['depth_image'], PWM_DATA_TYPE)
 
     # Reshape images to their correct dimensions
     color_image = tf.reshape(color_image, (COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS))
@@ -143,7 +100,7 @@ def prepare_dataset(tfrecord_path, batch_size, shuffle=True):
 # Create the model
 def create_model():
     # Color input and features
-    color_input = Input(shape=(COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS), name='color_input')  # Color has 3 channels
+    color_input = Input(shape=(COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS), name='color_input')
     color_features = layers.Conv2D(64, (3, 3), activation='relu')(color_input)
     color_features = layers.MaxPooling2D((2, 2))(color_features)
     color_features = layers.Conv2D(128, (3, 3), activation='relu')(color_features)
@@ -152,7 +109,7 @@ def create_model():
     color_features = layers.Dense(512, activation='relu')(color_features)
 
     # Depth input and features
-    depth_input = Input(shape=(DEPTH_WIDTH, DEPTH_HEIGHT, DEPTH_CHANNELS), name='depth_input')  # Corrected to 1 channel
+    depth_input = Input(shape=(DEPTH_WIDTH, DEPTH_HEIGHT, DEPTH_CHANNELS), name='depth_input')
     depth_features = layers.Conv2D(64, (3, 3), activation='relu')(depth_input)
     depth_features = layers.MaxPooling2D((2, 2))(depth_features)
     depth_features = layers.Conv2D(128, (3, 3), activation='relu')(depth_features)

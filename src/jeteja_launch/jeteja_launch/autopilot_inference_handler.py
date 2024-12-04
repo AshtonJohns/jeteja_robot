@@ -1,20 +1,8 @@
-import pycuda.driver as cuda
-import pycuda.autoinit
-import tensorrt as trt
-import os
-import numpy as np
-import cv2
-import pyrealsense2 as rs
+import traceback
 import rclpy
-from rclpy.node import Node
-from geometry_msgs.msg import Twist
-from sensor_msgs.msg import Image
-from std_msgs.msg import Float32
-import scripts.lower_control as lower_control
 import scripts.postprocessing as postprocessing
-from scripts.pico_handler import PicoConnection
-from ament_index_python.packages import get_package_share_directory
-from jeteja_launch_msgs.msg import PwmSignals
+from rclpy.node import Node
+from jeteja_launch_msgs.msg import PwmSignals, PreprocessedImage
 from scripts.preprocessing import image_msg_to_numpy
 from scripts.model_inference_handler import TensorRTInference
 
@@ -22,37 +10,58 @@ class AutopilotInferenceHandler(Node):
     def __init__(self):
         super().__init__('autopilot_inference_handler')
 
-        self.color_sub = self.create_subscription(Image, '/autopilot/preprocessed_images/color_image', self.color_callback, 10)
-        self.depth_sub = self.create_subscription(Image, '/autopilot/preprocessed_images/depth_image', self.depth_callback, 10)
+        self.image_sub = self.create_subscription(PreprocessedImage, '/autopilot/preprocessed_images', self.image_callback, 10)
 
         self.pwm_pub = self.create_publisher(PwmSignals, '/pwm_signals', 10)
 
-        self.trt_infer = TensorRTInference('/path/to/model.trt')
+        self.trt_infer = TensorRTInference()
 
         self.color_image = None
         self.depth_image = None
 
-    def color_callback(self, msg):
-        self.color_image = image_msg_to_numpy(msg)
-        self.run_inference()
-
-    def depth_callback(self, msg):
-        self.depth_image = image_msg_to_numpy(msg)
+    def image_callback(self, msg):
+        color_image = msg.color_image
+        depth_image = msg.depth_image
+        # self.get_logger().info(color_image)
+        # self.get_logger().info(depth_image)
+        # self.get_logger().info(color_image.encoding)
+        # self.get_logger().info(depth_image.encoding)
+        self.color_image = image_msg_to_numpy(color_image)
+        self.depth_image = image_msg_to_numpy(depth_image)
         self.run_inference()
 
     def run_inference(self):
         if self.color_image is not None and self.depth_image is not None:
+            # self.get_logger().info(self.color_image)
+            # self.get_logger().info(self.depth_image)
+
             outputs = self.trt_infer.infer(self.color_image, self.depth_image)
 
-            # Denormalize outputs
-            motor_pwm, steering_pwm = postprocessing.denormalize_pwm(outputs)
+            self.get_logger().info(str(outputs[0][0][0]))
+            self.get_logger().info(str(outputs[1][0][0]))
 
-            # Publish PWM values
-            pwm_msg = PwmSignals()
-            pwm_msg.stamp = self.get_clock().now().to_msg()
-            pwm_msg.motor_pwm = motor_pwm
-            pwm_msg.steering_pwm = steering_pwm
-
-            self.pwm_pub.publish(pwm_msg)
+            # motor_pwm, steering_pwm = postprocessing.denormalize_pwm(outputs)
 
 
+            # # Publish PWM values
+            # pwm_msg = PwmSignals()
+            # pwm_msg.stamp = self.get_clock().now().to_msg()
+            # pwm_msg.motor_pwm = motor_pwm
+            # pwm_msg.steering_pwm = steering_pwm
+
+            # self.pwm_pub.publish(pwm_msg)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = None
+    try:
+        node = AutopilotInferenceHandler()
+        rclpy.spin(node)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        traceback.print_exc()
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
