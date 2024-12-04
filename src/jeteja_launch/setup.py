@@ -42,7 +42,6 @@ setup(
             'remote_control_handler = jeteja_launch.remote_control_handler:main',
             'cmd_vel_fixed_rate = jeteja_launch.cmd_vel_fixed_rate:main',
             'cmd_vel_to_pwm = jeteja_launch.cmd_vel_to_pwm:main',
-            'image_to_processed_image = jeteja_launch.image_to_processed_image:main',
             'autopilot_control_handler = jeteja_launch.autopilot_control_handler:main',
             'autopilot_inference_handler = jeteja_launch.autopilot_inference_handler:main',
         ],
