@@ -13,6 +13,13 @@ def get_latest_directory(base_dir):
     latest_dir = max(dirs, key=lambda d: os.path.getmtime(os.path.join(base_dir, d)))
     return os.path.join(base_dir, latest_dir)   
 
+
+def get_files_from_subdirectory(directory):
+    files = glob.glob(os.path.join(directory, "**"), recursive=True)
+    # Filter to include only files (exclude directories)
+    files = [f for f in files if os.path.isfile(f)]
+    return files if files else None
+
 def get_files_from_directory(directory):
     files = [file.name for file in Path(directory).iterdir() if file.is_file()]
     return files if files else None
