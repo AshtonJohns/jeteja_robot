@@ -1,5 +1,7 @@
 # keys = button name
 emergency_btn: 0
 pause_recording_btn: 1
+enable_pwm_signals_btn: 2
+disable_pwm_signals_btn: 3
 start_recording_btn: 8
 pico_start_btn: 9

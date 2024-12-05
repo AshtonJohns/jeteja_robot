@@ -34,10 +34,12 @@ class RemoteControlHandler(Node):
 
         # State variables (True == alive, False == dead)
         self.pico_enable_state = False
+        self.pwm_signals_state = False
 
         # Timers to delete
         self.pico_timer = None
         self.recording_timer = None
+        self.pwm_signals_timer = None
 
         # Subscribers and publishers
         # self.cmd_vel_subscription = self.create_subscription(Twist, '/cmd_vel_fixed_rate', self.cmd_vel_callback, 15) # not timestamped, but a steady publish rate
@@ -71,8 +73,17 @@ class RemoteControlHandler(Node):
         # self.get_logger().info(" ".join(enabled_btns))
 
         if "emergency_btn" in enabled_btns:
-            self.get_logger().info("Emergency buttoned pressed")
+            self.get_logger().info("Emergency button pressed")
             self.pico_execute.close()
+
+        elif "enable_pwm_signals_btn" in enabled_btns:
+            self.get_logger().info("Enable pwm signal button press")
+            self.pwm_signals_state = True
+
+        elif "disable_pwm_signals_btn" in enabled_btns:
+            self.pico_execute.write(lower_control.create_neutral_command_message())
+            self.get_logger().info("Disable pwm signal button press")
+            self.pwm_signals_state = False
         
         elif "pause_recording_btn" in enabled_btns:
             self.get_logger().info("Pause button pressed")
@@ -140,11 +151,12 @@ class RemoteControlHandler(Node):
             motor_pwm = msg.motor_pwm
             steering_pwm = msg.steering_pwm
             command = lower_control.create_command_message(motor_pwm, steering_pwm)
-            if self.pico_enable_state: # Has surpassed the lockdown timer and is enabled
-                self.pico_execute.write(command)
-                # self.get_logger().info(f"Sent: {command}")
-            # else:
-            #     self.get_logger().info(f"Pico is not alive!")
+            if self.pwm_signals_state:
+                if self.pico_enable_state: # Has surpassed the lockdown timer and is enabled
+                    self.pico_execute.write(command)
+                    # self.get_logger().info(f"Sent: {command}")
+                # else:
+                #     self.get_logger().info(f"Pico is not alive!")
 
 def main(args=None):
     
