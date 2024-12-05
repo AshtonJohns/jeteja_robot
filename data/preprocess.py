@@ -1,14 +1,15 @@
 from sys import path
 
 path.append('/home/ucajetson/jeteja_ws/')
-
+import re
 import tensorflow as tf
 import glob
 import os
 import pandas as pd
 import cv2
 import numpy as np
-from utils.file_utilities import get_latest_directory
+from utils.file_utilities import get_latest_directory, get_files_from_directory
+
 from sklearn.model_selection import train_test_split
 import src.jeteja_launch.config.master_config as master_config
 
@@ -36,6 +37,8 @@ def process_commands(commands_path, output_dir, **kwargs):
     color_dir = kwargs.get('color_dir', False)
     depth_dir = kwargs.get('depth_dir', False)
 
+    image_files = get_files_from_directory(color_dir) # list of color files
+
     # Load the CSV file into a DataFrame
     commands_df = pd.read_csv(commands_path)
 
@@ -43,14 +46,16 @@ def process_commands(commands_path, output_dir, **kwargs):
     if color_dir and 'color_image_filename' in commands_df.columns:
         print("Validating color image filenames...")
         commands_df['color_image_filename'] = commands_df['color_image_filename'].apply(
-            lambda x: find_image(x, color_dir) if pd.notnull(x) else None
+            lambda x: find_image(x, color_dir, image_files) if pd.notnull(x) else None
         )
+
+    image_files = get_files_from_directory(depth_dir) # list of depth files
 
     # Process depth image filenames
     if depth_dir and 'depth_image_filename' in commands_df.columns:
         print("Validating depth image filenames...")
         commands_df['depth_image_filename'] = commands_df['depth_image_filename'].apply(
-            lambda x: find_image(x, depth_dir) if pd.notnull(x) else None
+            lambda x: find_image(x, depth_dir, image_files) if pd.notnull(x) else None
         )
 
     # Remove rows where either color or depth image is missing
@@ -63,7 +68,7 @@ def process_commands(commands_path, output_dir, **kwargs):
     print(f"Commands file processed and saved to {processed_commands_path}.")
 
 
-def find_image(image_name, search_dir):
+def find_image(image_name, search_dir, image_list):
     """
     Search for an image file in a directory, matching up to the second underscore,
     without including the file extension in the pattern.
@@ -89,15 +94,15 @@ def find_image(image_name, search_dir):
     # Start with the full nanoseconds and truncate step-by-step
     last_match = None
     for i in range(1, len(nanoseconds)):
-        pattern = os.path.join(search_dir, f"{prefix}_{nanoseconds[:i]}*")  # Match any extension
-        print(f"Searching with pattern: {pattern}")  # Debug output
-        matches = glob.glob(pattern)
+        pattern = f"{prefix}_{nanoseconds[:i]}.*"  # Match any extension
+        # print(f"Searching with pattern: {pattern}")  # Debug output
+        matches = [file for file in image_list if re.match(pattern,file)]
         if matches:
             last_match = matches[0]
         else:
             if last_match is not None:
-                print(f"Match found: {last_match}")  # Debug output
-                return os.path.basename(last_match)
+                # print(f"Match found: {last_match}")  # Debug output
+                return last_match
 
     # If the final pattern ends with `_`, it's invalid
     if len(nanoseconds) == 0 or f"{prefix}_" in pattern:

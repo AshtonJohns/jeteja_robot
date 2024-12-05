@@ -1,5 +1,6 @@
 import os
 import glob
+from pathlib import Path
 
 def sort_files(files):
     return sorted(files, key=lambda f: os.path.getmtime(f)) # Sort on date created
@@ -13,7 +14,5 @@ def get_latest_directory(base_dir):
     return os.path.join(base_dir, latest_dir)   
 
 def get_files_from_directory(directory):
-    files = glob.glob(os.path.join(directory, "**"), recursive=True)
-    # Filter to include only files (exclude directories)
-    files = [f for f in files if os.path.isfile(f)]
+    files = [file.name for file in Path(directory).iterdir() if file.is_file()]
     return files if files else None
