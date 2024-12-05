@@ -1,6 +1,3 @@
-from sys import path
-
-path.append('/home/ucajetson/jeteja_ws/')
 import re
 import tensorflow as tf
 import glob
