@@ -1,1 +1,1 @@
-split_size: 10000 # 10 GB
+split_size: "10000000000" # 10 GB

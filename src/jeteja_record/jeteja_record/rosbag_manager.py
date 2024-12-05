@@ -11,8 +11,8 @@ class RosbagManager(Node):
         # Get parameters
         self.topics = self.declare_parameter('topics', ['']).get_parameter_value().string_array_value
         self.get_logger().info(f"Topics: {self.topics}")
-        self.split_size = self.declare_parameter('split_size', '10000').get_parameter_value().integer_value
-        self.get_logger().info(f"Will split rosbags at {self.split_size} MB ({self.split_size/1000} GB)")
+        self.split_size = self.declare_parameter('split_size', '').get_parameter_value().string_value
+        self.get_logger().info(f"Will split rosbags at {self.split_size} MB ({int(self.split_size)/1000000000} GB)")
         self.output_dir = self.declare_parameter('output_dir', 'data/rosbags').get_parameter_value().string_value
         self.get_logger().info(f"Output directory: {self.output_dir}")
 
@@ -45,7 +45,7 @@ class RosbagManager(Node):
             try:
                 # Start the ros2 bag record process
                 self.rosbag_process = subprocess.Popen(
-                    ['ros2', 'bag', 'record', '-o', db_fn, *self.topics, '--split', '--max-bag-size', self.split_size],
+                    ['ros2', 'bag', 'record', '-o', db_fn, *self.topics, '--max-bag-size', self.split_size],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE
                 )

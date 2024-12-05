@@ -62,7 +62,7 @@ def generate_launch_description():
             output='screen',
             parameters=[{
                 'topics': topics,  # Pass topics as a parameter
-                'split_size': LaunchConfiguration('split_size'),
+                'split_size': split_size,
                 'output_dir': LaunchConfiguration('output_dir')  # Pass output directory as a parameter
             }]
         )
