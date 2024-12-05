@@ -1,4 +1,4 @@
-import src.jeteja_launch.config.master_config as master_config
+import config.master_config as master_config
 
 MOTOR_NEUTRAL_DUTY_CYCLE = master_config.MOTOR_NEUTRAL_DUTY_CYCLE
 MOTOR_MAX_DUTY_CYCLE = master_config.MOTOR_MAX_DUTY_CYCLE
@@ -47,3 +47,11 @@ def create_command_message(speed_duty_cycle, steering_duty_cycle):
                                                                      steering_duty_cycle)
     command = f"SPEED:{speed_duty_cycle};STEER:{steering_duty_cycle}\n"
     return command
+
+def create_neutral_command_message():
+    speed, steer = get_neutral_pwm()
+    command = create_command_message(speed,steer)
+    return command
+
+def get_neutral_pwm():
+    return master_config.MOTOR_NEUTRAL_DUTY_CYCLE, master_config.STEERING_NEUTRAL_DUTY_CYCLE
