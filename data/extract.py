@@ -3,7 +3,7 @@ import cv2
 import csv
 import yaml
 import src.jeteja_launch.config.master_config as  master_config
-from utils.file_utilities import get_files_from_directory, get_latest_directory, sort_files
+from utils.file_utilities import get_files_from_directory, get_latest_directory, sort_files, get_files_from_subdirectory
 from ament_index_python.packages import get_package_share_directory
 from rclpy.serialization import deserialize_message
 from sensor_msgs.msg import Image
@@ -131,7 +131,7 @@ def main():
     if latest_dir is None:
         raise FileNotFoundError # TODO improve this to log message
 
-    db_file = get_files_from_directory(latest_dir) # NOTE in the case the user paused/resumed during data collection
+    db_file = get_files_from_subdirectory(latest_dir) # NOTE in the case the user paused/resumed during data collection
 
     db_file = sort_files(db_file) # Maintain correct replay order
 

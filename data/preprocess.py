@@ -5,7 +5,7 @@ import os
 import pandas as pd
 import cv2
 import numpy as np
-from utils.file_utilities import get_latest_directory, get_files_from_directory
+from utils.file_utilities import get_latest_directory, get_files_from_directory, get_files_from_subdirectory
 
 from sklearn.model_selection import train_test_split
 import src.jeteja_launch.config.master_config as master_config
