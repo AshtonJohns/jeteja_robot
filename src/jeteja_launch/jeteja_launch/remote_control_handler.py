@@ -33,8 +33,6 @@ class RemoteControlHandler(Node):
         self.pico_execute = PicoConnection()
 
         # State variables (True == alive, False == dead)
-        self.recording_state = False
-        self.enable_recording_state = False
         self.pico_enable_state = False
 
         # Timers to delete
@@ -92,18 +90,12 @@ class RemoteControlHandler(Node):
 
 
     def handle_resume(self):
-        if not self.enable_recording_state and not self.recording_state:
-            self.get_logger().info("Resume data collection.")
-            self.recording_status_pub.publish(String(data='resume'))
-            self.recording_state = True
-            self.start_lockout_timer(seconds=10,recording=True)
+        self.get_logger().info("Resume data collection.")
+        self.recording_status_pub.publish(String(data='resume'))
 
     def handle_pause(self):
-        if not self.enable_recording_state and self.recording_state:
-            self.get_logger().info("Pause data collection.")
-            self.recording_status_pub.publish(String(data='pause'))
-            self.recording_state = False
-            self.start_lockout_timer(seconds=10,recording=True)
+        self.get_logger().info("Pause data collection.")
+        self.recording_status_pub.publish(String(data='pause'))
 
     def start_lockout_timer(self,seconds,**kwargs):
         """Start a lockout timer to prevent further actions for seconds.
@@ -116,7 +108,6 @@ class RemoteControlHandler(Node):
         """
         recording = kwargs.get('recording',False)
         pico = kwargs.get('pico', False)
-        self.enable_recording_state = True
         if recording:
             self.get_logger().info(f"Recording lockout enabled for {seconds} seconds.")
             if self.recording_timer is None: 
@@ -130,7 +121,7 @@ class RemoteControlHandler(Node):
 
     def unlock_buttons(self):
         """Unlock buttons after the lockout period."""
-        self.enable_recording_state = False
+        self.enable_recording_state = True
         self.get_logger().info("Lockout period ended for recording.")
         self.destroy_timer(self.recording_timer)
         self.recording_timer = None
