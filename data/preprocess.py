@@ -1,3 +1,7 @@
+from sys import path
+
+path.append('/home/ucajetson/jeteja_ws/')
+
 import tensorflow as tf
 import glob
 import os
@@ -83,13 +87,17 @@ def find_image(image_name, search_dir):
     nanoseconds = parts[2]
 
     # Start with the full nanoseconds and truncate step-by-step
-    for i in range(len(nanoseconds), 0, -1):
+    last_match = None
+    for i in range(1, len(nanoseconds)):
         pattern = os.path.join(search_dir, f"{prefix}_{nanoseconds[:i]}*")  # Match any extension
         print(f"Searching with pattern: {pattern}")  # Debug output
         matches = glob.glob(pattern)
         if matches:
-            print(f"Match found: {matches[0]}")  # Debug output
-            return os.path.basename(matches[0])  # Return the full matched file name with its actual extension
+            last_match = matches[0]
+        else:
+            if last_match is not None:
+                print(f"Match found: {last_match}")  # Debug output
+                return os.path.basename(last_match)
 
     # If the final pattern ends with `_`, it's invalid
     if len(nanoseconds) == 0 or f"{prefix}_" in pattern:
