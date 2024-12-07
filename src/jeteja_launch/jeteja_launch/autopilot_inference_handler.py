@@ -1,7 +1,6 @@
 import traceback
 import rclpy
-import scripts.postprocessing as postprocessing
-from scripts.preprocessing import ImageToRosMsg
+import scripts.image_processing as image_processing
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from jeteja_launch_msgs.msg import PreprocessedImage, PwmSignals
@@ -12,17 +11,17 @@ class AutopilotInferenceHandler(Node):
     def __init__(self):
         super().__init__('autopilot_inference_handler')
 
-        self.image_exec = ImageToRosMsg()
-
         # Subscriptions to raw camera topics
+        self.rgb_image_topic = '/camera/camera/color/image_raw'
         self.color_sub = self.create_subscription(
-            Image, '/camera/camera/color/image_raw', self.color_callback, 10)
+            Image, self.rgb_image_topic, self.color_callback, 10)
+        self.depth_image_topic = '/camera/camera/depth/image_rect_raw'
         self.depth_sub = self.create_subscription(
-            Image, '/camera/camera/depth/image_rect_raw', self.depth_callback, 10)
+            Image, self.depth_image_topic, self.depth_callback, 10)
 
-        # Publisher for combined preprocessed images
-        self.preprocessed_pub = self.create_publisher(
-            PreprocessedImage, '/autopilot/preprocessed_images', 10)
+        # # Publisher for combined preprocessed images
+        # self.preprocessed_pub = self.create_publisher(
+        #     PreprocessedImage, '/autopilot/preprocessed_images', 10)
         
         # Model for inference
         self.trt_infer = TensorRTInference()
@@ -36,23 +35,23 @@ class AutopilotInferenceHandler(Node):
 
     def color_callback(self, msg):
         # Convert ROS Image message to NumPy array
-        self.color_image = self.image_exec.bridge_imgmsg_to_cv2(msg, is_color=True)
+        self.color_image = image_processing.deserialized_ros_to_cv(msg, color=True)
         self.process_and_publish()
 
     def depth_callback(self, msg):
         # Convert ROS Image message to NumPy array
-        self.depth_image = self.image_exec.bridge_imgmsg_to_cv2(msg, is_depth=True)
+        self.depth_image = image_processing.deserialized_ros_to_cv(msg, depth=True)
         self.process_and_publish()
 
     def process_and_publish(self):
         if self.color_image is not None and self.depth_image is not None:
             # Preprocess color and depth images
-            color_image = self.image_exec.preprocess(self.color_image,color=True)
-            depth_image = self.image_exec.preprocess(self.depth_image,depth=True)
+            color_image = image_processing.normalize_image(self.color_image,color=True)
+            depth_image = image_processing.normalize_image(self.depth_image,depth=True)
 
             # Infer images
             outputs = self.trt_infer.infer(color_image, depth_image)
-            motor_pwm, steering_pwm = postprocessing.denormalize_pwm(outputs)
+            motor_pwm, steering_pwm = image_processing.denormalize_pwm(outputs)
 
             # DEBUG
             # self.get_logger().info(str(outputs[0][0][0]))
