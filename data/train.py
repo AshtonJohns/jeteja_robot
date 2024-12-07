@@ -4,11 +4,13 @@ import pandas as pd
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import src.jeteja_launch.config.master_config as master_config
-from tensorflow.keras import layers, models, Input
+# from tensorflow.keras import layers, models, Input
 from tensorflow.keras.models import Model
 from tensorflow.keras import mixed_precision
 from utils.file_utilities import get_latest_directory
 from utils.training_utilities import write_run_trt_optimizer_script, write_savedmodel_to_onnx_script
+from tensorflow.keras.applications import EfficientNetB0
+from tensorflow.keras.layers import Input, Dense, Concatenate, Multiply, Dropout, Flatten
 
 COLOR_WIDTH = master_config.COLOR_WIDTH
 COLOR_HEIGHT = master_config.COLOR_HEIGHT
@@ -100,37 +102,81 @@ def prepare_dataset(tfrecord_path, batch_size, shuffle=True):
 # Create the model
 def create_model():
     # Color input and features
-    color_input = Input(shape=(COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS), name='color_input')
-    color_features = layers.Conv2D(64, (3, 3), activation='relu')(color_input)
-    color_features = layers.MaxPooling2D((2, 2))(color_features)
-    color_features = layers.Conv2D(128, (3, 3), activation='relu')(color_features)
-    color_features = layers.MaxPooling2D((2, 2))(color_features)
-    color_features = layers.GlobalAveragePooling2D()(color_features)
-    color_features = layers.Dense(512, activation='relu')(color_features)
+    color_input = Input(shape=(COLOR_HEIGHT, COLOR_WIDTH, COLOR_CHANNELS), name='color_input')
+    efficientnet_color = EfficientNetB0(include_top=False, weights='imagenet', input_shape=(COLOR_HEIGHT, COLOR_WIDTH, COLOR_CHANNELS))
+    color_features = efficientnet_color(color_input)
+    color_features = Flatten()(color_features)  # Use Flatten instead of pooling
+    color_features = Dense(1024, activation='relu')(color_features)  # Increased neurons for high-resolution
+    color_features = Dropout(0.3)(color_features)
 
     # Depth input and features
-    depth_input = Input(shape=(DEPTH_WIDTH, DEPTH_HEIGHT, DEPTH_CHANNELS), name='depth_input')
-    depth_features = layers.Conv2D(64, (3, 3), activation='relu')(depth_input)
-    depth_features = layers.MaxPooling2D((2, 2))(depth_features)
-    depth_features = layers.Conv2D(128, (3, 3), activation='relu')(depth_features)
-    depth_features = layers.MaxPooling2D((2, 2))(depth_features)
-    depth_features = layers.GlobalAveragePooling2D()(depth_features)
-    depth_features = layers.Dense(512, activation='relu')(depth_features)
+    depth_input = Input(shape=(DEPTH_HEIGHT, DEPTH_WIDTH, DEPTH_CHANNELS), name='depth_input')
+    efficientnet_depth = EfficientNetB0(include_top=False, weights=None, input_shape=(DEPTH_HEIGHT, DEPTH_WIDTH, DEPTH_CHANNELS))
+    depth_features = efficientnet_depth(depth_input)
+    depth_features = Flatten()(depth_features)  # Use Flatten instead of pooling
+    depth_features = Dense(512, activation='relu')(depth_features)  # Fewer neurons for depth
+    depth_features = Dropout(0.3)(depth_features)
 
-    # Combine features
-    combined = layers.Concatenate()([color_features, depth_features])
-    x = layers.Dense(256, activation='relu')(combined)
-    x = layers.Dense(128, activation='relu')(x)
+    # Trainable weights for dynamic weighting
+    color_weight = Dense(1, activation='sigmoid', name='color_weight')(color_features)
+    depth_weight = Dense(1, activation='sigmoid', name='depth_weight')(depth_features)
+
+    # Apply weights
+    weighted_color = Multiply()([color_features, color_weight])
+    weighted_depth = Multiply()([depth_features, depth_weight])
+
+    # Combine weighted features
+    combined = Concatenate()([weighted_color, weighted_depth])
+    x = Dense(1024, activation='relu')(combined)
+    x = Dropout(0.4)(x)
+    x = Dense(512, activation='relu')(x)
+    x = Dropout(0.3)(x)
+    x = Dense(256, activation='relu')(x)
 
     # Outputs
-    linear_output = layers.Dense(1, name='motor_pwm')(x)
-    angular_output = layers.Dense(1, name='steering_pwm')(x)
+    linear_output = Dense(1, name='motor_pwm')(x)
+    angular_output = Dense(1, name='steering_pwm')(x)
 
     # Compile model
     model = Model(inputs=[color_input, depth_input], outputs=[linear_output, angular_output])
-    optimizer = tf.keras.optimizers.Adam()
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
     model.compile(optimizer=optimizer, loss={'motor_pwm': 'mse', 'steering_pwm': 'mse'})
     return model
+
+
+# def create_model():
+#     # Color input and features
+#     color_input = Input(shape=(COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS), name='color_input')
+#     color_features = layers.Conv2D(64, (3, 3), activation='relu')(color_input)
+#     color_features = layers.MaxPooling2D((2, 2))(color_features)
+#     color_features = layers.Conv2D(128, (3, 3), activation='relu')(color_features)
+#     color_features = layers.MaxPooling2D((2, 2))(color_features)
+#     color_features = layers.GlobalAveragePooling2D()(color_features)
+#     color_features = layers.Dense(512, activation='relu')(color_features)
+
+#     # Depth input and features
+#     depth_input = Input(shape=(DEPTH_WIDTH, DEPTH_HEIGHT, DEPTH_CHANNELS), name='depth_input')
+#     depth_features = layers.Conv2D(64, (3, 3), activation='relu')(depth_input)
+#     depth_features = layers.MaxPooling2D((2, 2))(depth_features)
+#     depth_features = layers.Conv2D(128, (3, 3), activation='relu')(depth_features)
+#     depth_features = layers.MaxPooling2D((2, 2))(depth_features)
+#     depth_features = layers.GlobalAveragePooling2D()(depth_features)
+#     depth_features = layers.Dense(512, activation='relu')(depth_features)
+
+#     # Combine features
+#     combined = layers.Concatenate()([color_features, depth_features])
+#     x = layers.Dense(256, activation='relu')(combined)
+#     x = layers.Dense(128, activation='relu')(x)
+
+#     # Outputs
+#     linear_output = layers.Dense(1, name='motor_pwm')(x)
+#     angular_output = layers.Dense(1, name='steering_pwm')(x)
+
+#     # Compile model
+#     model = Model(inputs=[color_input, depth_input], outputs=[linear_output, angular_output])
+#     optimizer = tf.keras.optimizers.Adam()
+#     model.compile(optimizer=optimizer, loss={'motor_pwm': 'mse', 'steering_pwm': 'mse'})
+#     return model
 
 
 if __name__ == '__main__':
