@@ -27,7 +27,7 @@ class AutopilotInferenceHandler(Node):
         self.trt_infer = TensorRTInference()
 
         # PWM publisher
-        self.pwm_pub = self.create_publisher(PwmSignals, '/pwm_signals', 60)
+        self.pwm_pub = self.create_publisher(PwmSignals, '/pwm_signals', 10)
 
         # Internal storage for synchronized processing
         self.color_image = None
@@ -51,21 +51,22 @@ class AutopilotInferenceHandler(Node):
 
             # Infer images
             outputs = self.trt_infer.infer(color_image, depth_image)
-            motor_pwm, steering_pwm = image_processing.denormalize_pwm(outputs)
+            # motor_pwm, steering_pwm = image_processing.denormalize_pwm(outputs)
 
             # DEBUG
-            # self.get_logger().info(str(outputs[0][0][0]))
-            # self.get_logger().info(str(outputs[1][0][0]))
+            self.get_logger().info(f"{outputs}")
+            # self.get_logger().info(f"{motor_pwm}")
+            # self.get_logger().info(f"{steering_pwm}")
 
             # Publish PWM values
-            pwm_msg = PwmSignals()
-            pwm_msg.stamp = self.get_clock().now().to_msg()
-            pwm_msg.motor_pwm = motor_pwm
-            pwm_msg.steering_pwm = steering_pwm
-            self.pwm_pub.publish(pwm_msg)
+            # pwm_msg = PwmSignals()
+            # pwm_msg.stamp = self.get_clock().now().to_msg()
+            # pwm_msg.motor_pwm = motor_pwm
+            # pwm_msg.steering_pwm = steering_pwm
+            # self.pwm_pub.publish(pwm_msg)
 
-            self.color_image = None
-            self.depth_image = None
+            # self.color_image = None
+            # self.depth_image = None
 
             # TODO ROS topic to publish image data
             # # Convert back to ROS Image messages

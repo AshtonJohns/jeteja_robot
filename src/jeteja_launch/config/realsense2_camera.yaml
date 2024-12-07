@@ -13,17 +13,17 @@ enable_rgbd: false
 enable_sync: true  # Synchronize color and depth streams for alignment
 
 # Color camera settings
-rgb_camera.color_profile: 640x360x60  # Resolution and framerate
+rgb_camera.color_profile: 424x240x60  # Resolution and framerate
 rgb_camera.power_line_frequency: 2  # Reduce flickering in indoor lighting
 rgb_camera.enable_auto_exposure: true # See depth_module.enable_auto_exposure
 rgb_camera.color_format: 'RGB8' # This is needed for encoding
 
 # Depth camera settings
-depth_module.depth_profile: 640x360x60  # Depth resolution and FPS
+depth_module.depth_profile: 424x240x60  # Depth resolution and FPS
 align_depth.enable: true  # Align depth to color image
 pointcloud.enable: false
 depth_module.enable_auto_exposure: true # Automatically adjusts exposure for depth sensing in varying lighting.
-depth_module.laser_power: 200.0 # Laser intensity at cost of power consumption
+depth_module.laser_power: 150.0 # Laser intensity at cost of power consumption
 depth_module.depth_format: 'Z16'
 
 
