@@ -1,4 +1,4 @@
-MODEL_PATH: /home/ucajetson/jeteja_robot/data/models/2024-12-05_01-50-08/model.trt
+MODEL_PATH: /home/ucajetson/jeteja_robot/data/models/2024-12-06_20-39-03/model.trt
 BATCH_SIZE: 1
 
 COLOR_NORMALIZATION_FACTOR: 255.0 # For uint8 images
