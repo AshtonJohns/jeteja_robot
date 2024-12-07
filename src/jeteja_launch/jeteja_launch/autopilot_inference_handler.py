@@ -27,7 +27,7 @@ class AutopilotInferenceHandler(Node):
         self.trt_infer = TensorRTInference()
 
         # PWM publisher
-        self.pwm_pub = self.create_publisher(PwmSignals, '/pwm_signals', 10)
+        self.pwm_pub = self.create_publisher(PwmSignals, '/pwm_signals', 60)
 
         # Internal storage for synchronized processing
         self.color_image = None
