@@ -4,13 +4,12 @@ import pandas as pd
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import src.jeteja_launch.config.master_config as master_config
-from tensorflow.keras import layers, models, Input
-from tensorflow.keras.models import Model
 from tensorflow.keras import mixed_precision
+from tensorflow.keras.models import Model
+from tensorflow.keras.applications import EfficientNetB0
+from tensorflow.keras.layers import layers, Input, Dense, Flatten, Concatenate, Multiply, Dropout, GlobalAveragePooling2D
 from utils.file_utilities import get_latest_directory
 from utils.training_utilities import write_run_trt_optimizer_script, write_savedmodel_to_onnx_script
-from tensorflow.keras.applications import EfficientNetB0
-from tensorflow.keras.layers import Input, Dense, Concatenate, Multiply, Dropout, Flatten
 
 COLOR_WIDTH = master_config.COLOR_WIDTH
 COLOR_HEIGHT = master_config.COLOR_HEIGHT
@@ -100,6 +99,154 @@ def prepare_dataset(tfrecord_path, batch_size, shuffle=True):
     return parsed_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
 # Create the model
+def create_model(use_efficientnet=True, use_flatten=True, neurons=None):
+    # Default neurons if not provided
+    if neurons is None:
+        neurons = {
+            'color_dense': 128,
+            'depth_dense': 64,
+            'combined_dense1': 256,
+            'combined_dense2': 128,
+            'combined_dense3': 64,
+        }
+
+    # Color input and features
+    color_input = Input(shape=(COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS), name='color_input')
+    
+    if use_efficientnet:
+        # EfficientNet backbone
+        efficientnet_color = EfficientNetB0(include_top=False, weights='imagenet', input_shape=(COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS), name="efficientnetb0_color")
+        color_features = efficientnet_color(color_input)
+        if use_flatten:
+            color_features = Flatten()(color_features)
+        else:
+            color_features = GlobalAveragePooling2D()(color_features)
+    else:
+        # Custom Conv2D backbone
+        color_features = layers.Conv2D(64, (3, 3), activation='relu')(color_input)
+        color_features = layers.MaxPooling2D((2, 2))(color_features)
+        color_features = layers.Conv2D(128, (3, 3), activation='relu')(color_features)
+        color_features = layers.MaxPooling2D((2, 2))(color_features)
+        color_features = Flatten()(color_features) if use_flatten else GlobalAveragePooling2D()(color_features)
+
+    color_features = Dense(neurons['color_dense'], activation='relu')(color_features)
+    color_features = Dropout(0.3)(color_features)
+
+    # Depth input and features
+    depth_input = Input(shape=(DEPTH_WIDTH, DEPTH_HEIGHT, DEPTH_CHANNELS), name='depth_input')
+
+    if use_efficientnet:
+        # EfficientNet backbone
+        efficientnet_depth = EfficientNetB0(include_top=False, weights=None, input_shape=(DEPTH_WIDTH, DEPTH_HEIGHT, DEPTH_CHANNELS), name="efficientnetb0_depth")
+        depth_features = efficientnet_depth(depth_input)
+        if use_flatten:
+            depth_features = Flatten()(depth_features)
+        else:
+            depth_features = GlobalAveragePooling2D()(depth_features)
+    else:
+        # Custom Conv2D backbone
+        depth_features = layers.Conv2D(64, (3, 3), activation='relu')(depth_input)
+        depth_features = layers.MaxPooling2D((2, 2))(depth_features)
+        depth_features = layers.Conv2D(128, (3, 3), activation='relu')(depth_features)
+        depth_features = layers.MaxPooling2D((2, 2))(depth_features)
+        depth_features = Flatten()(depth_features) if use_flatten else GlobalAveragePooling2D()(depth_features)
+
+    depth_features = Dense(neurons['depth_dense'], activation='relu')(depth_features)
+    depth_features = Dropout(0.3)(depth_features)
+
+    # Trainable weights for dynamic weighting
+    color_weight = Dense(1, activation='sigmoid', name='color_weight')(color_features)
+    depth_weight = Dense(1, activation='sigmoid', name='depth_weight')(depth_features)
+
+    # Apply weights
+    weighted_color = Multiply()([color_features, color_weight])
+    weighted_depth = Multiply()([depth_features, depth_weight])
+
+    # Combine weighted features
+    combined = Concatenate()([weighted_color, weighted_depth])
+    x = Dense(neurons['combined_dense1'], activation='relu')(combined)
+    x = Dropout(0.4)(x)
+    x = Dense(neurons['combined_dense2'], activation='relu')(x)
+    x = Dropout(0.3)(x)
+    x = Dense(neurons['combined_dense3'], activation='relu')(x)
+
+    # Outputs
+    linear_output = Dense(1, name='motor_pwm')(x)
+    angular_output = Dense(1, name='steering_pwm')(x)
+
+    # Compile model
+    model = Model(inputs=[color_input, depth_input], outputs=[linear_output, angular_output])
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+    model.compile(optimizer=optimizer, loss={'motor_pwm': 'mse', 'steering_pwm': 'mse'})
+    return model
+
+
+
+if __name__ == '__main__':
+    # Training setup
+    batch_size = 24 # TODO
+    epochs = 100 # TODO
+
+    train_dataset = prepare_dataset(train_tfrecord, batch_size=batch_size, shuffle=True)
+    val_dataset = prepare_dataset(val_tfrecord, batch_size=batch_size, shuffle=False)
+
+    model = create_model()
+    model.summary()
+
+    # Callbacks
+    callbacks = [
+        tf.keras.callbacks.ModelCheckpoint(
+            filepath=os.path.join(MODEL_DIR, "best_model.keras"),
+            monitor="val_loss",
+            save_best_only=True,
+            verbose=1
+        ),
+        tf.keras.callbacks.CSVLogger(
+            os.path.join(MODEL_DIR, "training_log.csv"),
+            append=True
+        ),
+        tf.keras.callbacks.EarlyStopping(
+            monitor="val_loss",
+            patience=5,
+            verbose=1,
+            restore_best_weights=True
+        ),
+    ]
+
+    # Train the model
+    history = model.fit(
+        train_dataset,
+        validation_data=val_dataset,
+        epochs=epochs,
+        callbacks=callbacks
+    )
+
+    # Save the final model and plot
+    model.save(os.path.join(MODEL_DIR, "final_model.keras"))
+
+    # Export SaveModel for trt
+    model.export(os.path.join(MODEL_DIR, "SavedModel"))
+
+    # Write bash scripts
+    write_savedmodel_to_onnx_script(os.path.join(MODEL_DIR, 'convert_onnx.bash'))
+
+    write_run_trt_optimizer_script(COLOR_WIDTH, COLOR_HEIGHT, DEPTH_WIDTH, DEPTH_HEIGHT,
+                    os.path.join(MODEL_DIR, 'run_trt.bash'))
+
+    history_df = pd.DataFrame(history.history)
+    history_df.to_csv(os.path.join(MODEL_DIR, "training_history.csv"), index=False)
+
+    plt.plot(history.history['loss'], label='Training Loss')
+    plt.plot(history.history['val_loss'], label='Validation Loss')
+    plt.legend()
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training vs Validation Loss')
+    plt.savefig(os.path.join(MODEL_DIR, "training_vs_validation.png"))
+
+
+
+####### TRIED MODELS #######
 # def create_model():
 #     # Color input and features
 #     color_input = Input(shape=(COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS), name='color_input')
@@ -232,100 +379,36 @@ def prepare_dataset(tfrecord_path, batch_size, shuffle=True):
 #     model.compile(optimizer=optimizer, loss={'motor_pwm': 'mse', 'steering_pwm': 'mse'})
 #     return model
 
+# def create_model():
+#     # Color input and features
+#     color_input = Input(shape=(COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS), name='color_input')
+#     color_features = layers.Conv2D(64, (3, 3), activation='relu')(color_input)
+#     color_features = layers.MaxPooling2D((2, 2))(color_features)
+#     color_features = layers.Conv2D(128, (3, 3), activation='relu')(color_features)
+#     color_features = layers.MaxPooling2D((2, 2))(color_features)
+#     color_features = layers.GlobalAveragePooling2D()(color_features)
+#     color_features = layers.Dense(512, activation='relu')(color_features)
 
-def create_model():
-    # Color input and features
-    color_input = Input(shape=(COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS), name='color_input')
-    color_features = layers.Conv2D(64, (3, 3), activation='relu')(color_input)
-    color_features = layers.MaxPooling2D((2, 2))(color_features)
-    color_features = layers.Conv2D(128, (3, 3), activation='relu')(color_features)
-    color_features = layers.MaxPooling2D((2, 2))(color_features)
-    color_features = layers.GlobalAveragePooling2D()(color_features)
-    color_features = layers.Dense(512, activation='relu')(color_features)
+#     # Depth input and features
+#     depth_input = Input(shape=(DEPTH_WIDTH, DEPTH_HEIGHT, DEPTH_CHANNELS), name='depth_input')
+#     depth_features = layers.Conv2D(64, (3, 3), activation='relu')(depth_input)
+#     depth_features = layers.MaxPooling2D((2, 2))(depth_features)
+#     depth_features = layers.Conv2D(128, (3, 3), activation='relu')(depth_features)
+#     depth_features = layers.MaxPooling2D((2, 2))(depth_features)
+#     depth_features = layers.GlobalAveragePooling2D()(depth_features)
+#     depth_features = layers.Dense(512, activation='relu')(depth_features)
 
-    # Depth input and features
-    depth_input = Input(shape=(DEPTH_WIDTH, DEPTH_HEIGHT, DEPTH_CHANNELS), name='depth_input')
-    depth_features = layers.Conv2D(64, (3, 3), activation='relu')(depth_input)
-    depth_features = layers.MaxPooling2D((2, 2))(depth_features)
-    depth_features = layers.Conv2D(128, (3, 3), activation='relu')(depth_features)
-    depth_features = layers.MaxPooling2D((2, 2))(depth_features)
-    depth_features = layers.GlobalAveragePooling2D()(depth_features)
-    depth_features = layers.Dense(512, activation='relu')(depth_features)
+#     # Combine features
+#     combined = layers.Concatenate()([color_features, depth_features])
+#     x = layers.Dense(256, activation='relu')(combined)
+#     x = layers.Dense(128, activation='relu')(x)
 
-    # Combine features
-    combined = layers.Concatenate()([color_features, depth_features])
-    x = layers.Dense(256, activation='relu')(combined)
-    x = layers.Dense(128, activation='relu')(x)
+#     # Outputs
+#     linear_output = layers.Dense(1, name='motor_pwm')(x)
+#     angular_output = layers.Dense(1, name='steering_pwm')(x)
 
-    # Outputs
-    linear_output = layers.Dense(1, name='motor_pwm')(x)
-    angular_output = layers.Dense(1, name='steering_pwm')(x)
-
-    # Compile model
-    model = Model(inputs=[color_input, depth_input], outputs=[linear_output, angular_output])
-    optimizer = tf.keras.optimizers.Adam()
-    model.compile(optimizer=optimizer, loss={'motor_pwm': 'mse', 'steering_pwm': 'mse'})
-    return model
-
-
-if __name__ == '__main__':
-    # Training setup
-    batch_size = 24 # TODO
-    epochs = 100 # TODO
-
-    train_dataset = prepare_dataset(train_tfrecord, batch_size=batch_size, shuffle=True)
-    val_dataset = prepare_dataset(val_tfrecord, batch_size=batch_size, shuffle=False)
-
-    model = create_model()
-    model.summary()
-
-    # Callbacks
-    callbacks = [
-        tf.keras.callbacks.ModelCheckpoint(
-            filepath=os.path.join(MODEL_DIR, "best_model.keras"),
-            monitor="val_loss",
-            save_best_only=True,
-            verbose=1
-        ),
-        tf.keras.callbacks.CSVLogger(
-            os.path.join(MODEL_DIR, "training_log.csv"),
-            append=True
-        ),
-        tf.keras.callbacks.EarlyStopping(
-            monitor="val_loss",
-            patience=5,
-            verbose=1,
-            restore_best_weights=True
-        ),
-    ]
-
-    # Train the model
-    history = model.fit(
-        train_dataset,
-        validation_data=val_dataset,
-        epochs=epochs,
-        callbacks=callbacks
-    )
-
-    # Save the final model and plot
-    model.save(os.path.join(MODEL_DIR, "final_model.keras"))
-
-    # Export SaveModel for trt
-    model.export(os.path.join(MODEL_DIR, "SavedModel"))
-
-    # Write bash scripts
-    write_savedmodel_to_onnx_script(os.path.join(MODEL_DIR, 'convert_onnx.bash'))
-
-    write_run_trt_optimizer_script(COLOR_WIDTH, COLOR_HEIGHT, DEPTH_WIDTH, DEPTH_HEIGHT,
-                    os.path.join(MODEL_DIR, 'run_trt.bash'))
-
-    history_df = pd.DataFrame(history.history)
-    history_df.to_csv(os.path.join(MODEL_DIR, "training_history.csv"), index=False)
-
-    plt.plot(history.history['loss'], label='Training Loss')
-    plt.plot(history.history['val_loss'], label='Validation Loss')
-    plt.legend()
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.title('Training vs Validation Loss')
-    plt.savefig(os.path.join(MODEL_DIR, "training_vs_validation.png"))
+#     # Compile model
+#     model = Model(inputs=[color_input, depth_input], outputs=[linear_output, angular_output])
+#     optimizer = tf.keras.optimizers.Adam()
+#     model.compile(optimizer=optimizer, loss={'motor_pwm': 'mse', 'steering_pwm': 'mse'})
+#     return model
