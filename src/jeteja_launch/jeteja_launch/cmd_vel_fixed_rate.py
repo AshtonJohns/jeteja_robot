@@ -22,7 +22,7 @@ class ConstantRateCmdVelPublisher(Node):
         )
 
         # Publish messages at a constant rate (e.g., 30 Hz)
-        self.timer = self.create_timer(1 / 55.0, self.publish_last_cmd_vel)  # 50 Hz
+        self.timer = self.create_timer(1 / 30.0, self.publish_last_cmd_vel)  # 55 Hz
 
         # State to hold the last received `/cmd_vel` message
         self.last_cmd_vel = None
