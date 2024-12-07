@@ -5,6 +5,7 @@ import os
 import pandas as pd
 import cv2
 import numpy as np
+import src.jeteja_launch.scripts.image_processing as image_processing
 from utils.file_utilities import get_latest_directory, get_files_from_directory, get_files_from_subdirectory
 
 from sklearn.model_selection import train_test_split
@@ -140,11 +141,9 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
                 raise Exception(f"Depth image is not uint16. Found: {depth_image.dtype}")
 
             # Normalize color image to [0, 1]
-            color_image = (color_image / COLOR_NORMALIZATION_FACTOR).astype(COLOR_PREPROCESS_DATA_TYPE)
-
+            color_image = image_processing.normalize_image(color_image,color=True)
             # Normalize depth image to range [0, 1]
-            # depth_image = depth_image.astype(DEPTH_PREPROCESS_DATA_TYPE) / DEPTH_NORMALIZATION_FACTOR
-            depth_image = (depth_image / DEPTH_NORMALIZATION_FACTOR).astype(DEPTH_PREPROCESS_DATA_TYPE)
+            depth_image = image_processing.normalize_image(depth_image,depth=True)
 
             if len(depth_image.shape) == 2:
                 depth_image = np.expand_dims(depth_image, axis=-1)  # Add channel dimension

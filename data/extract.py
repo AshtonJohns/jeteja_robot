@@ -3,6 +3,7 @@ import cv2
 import csv
 import yaml
 import src.jeteja_launch.config.master_config as  master_config
+import src.jeteja_launch.scripts.image_processing as image_processing
 from utils.file_utilities import get_files_from_directory, get_latest_directory, sort_files, get_files_from_subdirectory
 from ament_index_python.packages import get_package_share_directory
 from rclpy.serialization import deserialize_message
@@ -66,24 +67,18 @@ def extract_rosbag(bag_files, output_dir):
 
             # Process color images
             if topic == '/camera/camera/color/image_raw':
-                image_msg = deserialize_message(msg_data, 
-                                                get_message(type_map[topic]))
-                print(COLOR_ENCODING)
-                print(image_msg.encoding)
-                cv_image = bridge.imgmsg_to_cv2(image_msg, 
-                                                desired_encoding=COLOR_ENCODING)
+                topic_type = type_map[topic]
+                image_msg = image_processing.deserialize_ros_message(msg_data,topic_type)
+                cv_image = image_processing.ros_to_cv(msg_data, topic_type, color=True)
                 timestamp_str = f"{image_msg.header.stamp.sec}_{image_msg.header.stamp.nanosec}"
                 color_image_filename = os.path.join(color_images_dir, f"color_{timestamp_str}.jpg")
                 cv2.imwrite(color_image_filename, cv_image)
 
             # Process depth images
             elif topic == '/camera/camera/depth/image_rect_raw':
-                depth_msg = deserialize_message(msg_data, 
-                                                get_message(type_map[topic]))
-                print(DEPTH_ENCODING)
-                print(depth_msg.encoding)
-                depth_image = bridge.imgmsg_to_cv2(depth_msg, 
-                                                   desired_encoding='16UC1')
+                topic_type = type_map[topic]
+                depth_msg = image_processing.deserialize_ros_message(msg_data,topic_type)
+                depth_image = image_processing.ros_to_cv(msg_data, topic_type, depth=True)
                 timestamp_str = f"{depth_msg.header.stamp.sec}_{depth_msg.header.stamp.nanosec}"
                 depth_image_filename = os.path.join(depth_images_dir, f"depth_{timestamp_str}.png")
                 cv2.imwrite(depth_image_filename, depth_image)
