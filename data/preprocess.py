@@ -22,6 +22,9 @@ STEERING_PWM_NORMALIZATION_FACTOR = master_config.STEERING_PWM_NORMALIZATION_FAC
 COLOR_PREPROCESS_DATA_TYPE = master_config.COLOR_PREPROCESS_DATA_TYPE
 DEPTH_PREPROCESS_DATA_TYPE = master_config.DEPTH_PREPROCESS_DATA_TYPE
 
+# debug
+print(COLOR_NORMALIZATION_FACTOR)
+
 def process_commands(commands_path, output_dir, **kwargs):
     """
     Processes the commands.csv file to find existing image files or remove rows with missing images.
