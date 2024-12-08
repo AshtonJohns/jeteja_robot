@@ -13,11 +13,9 @@ class AutopilotInferenceHandler(Node):
 
         # Subscriptions to raw camera topics
         self.rgb_image_topic = '/camera/camera/color/image_raw'
-        self.color_sub = self.create_subscription(
-            Image, self.rgb_image_topic, self.color_callback, 10)
+        self.color_sub = self.create_subscription(Image, self.rgb_image_topic, self.color_callback, 10) # TODO QoS reliability
         self.depth_image_topic = '/camera/camera/depth/image_rect_raw'
-        self.depth_sub = self.create_subscription(
-            Image, self.depth_image_topic, self.depth_callback, 10)
+        self.depth_sub = self.create_subscription(Image, self.depth_image_topic, self.depth_callback, 10)
 
         # # Publisher for combined preprocessed images
         # self.preprocessed_pub = self.create_publisher(
@@ -51,22 +49,22 @@ class AutopilotInferenceHandler(Node):
 
             # Infer images
             outputs = self.trt_infer.infer(color_image, depth_image)
-            # motor_pwm, steering_pwm = image_processing.denormalize_pwm(outputs)
+            motor_pwm, steering_pwm = image_processing.denormalize_pwm(outputs)
 
             # DEBUG
-            self.get_logger().info(f"{outputs}")
+            # self.get_logger().info(f"{outputs}")
             # self.get_logger().info(f"{motor_pwm}")
             # self.get_logger().info(f"{steering_pwm}")
 
             # Publish PWM values
-            # pwm_msg = PwmSignals()
-            # pwm_msg.stamp = self.get_clock().now().to_msg()
-            # pwm_msg.motor_pwm = motor_pwm
-            # pwm_msg.steering_pwm = steering_pwm
-            # self.pwm_pub.publish(pwm_msg)
+            pwm_msg = PwmSignals()
+            pwm_msg.stamp = self.get_clock().now().to_msg()
+            pwm_msg.motor_pwm = motor_pwm
+            pwm_msg.steering_pwm = steering_pwm
+            self.pwm_pub.publish(pwm_msg)
 
-            # self.color_image = None
-            # self.depth_image = None
+            self.color_image = None
+            self.depth_image = None
 
             # TODO ROS topic to publish image data
             # # Convert back to ROS Image messages
