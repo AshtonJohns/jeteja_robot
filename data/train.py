@@ -102,8 +102,47 @@ def prepare_dataset(tfrecord_path, batch_size, shuffle=True):
 
     return parsed_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
+def se_block(input_tensor, reduction_ratio=16):
+    channels = input_tensor.shape[-1]
+    se = layers.GlobalAveragePooling2D()(input_tensor)
+    se = layers.Dense(channels // reduction_ratio, activation='relu')(se)
+    se = layers.Dense(channels, activation='sigmoid')(se)
+    return layers.Multiply()([input_tensor, se])
+
+
+def spatial_attention(input_tensor):
+    avg_pool = tf.reduce_mean(input_tensor, axis=-1, keepdims=True)
+    max_pool = tf.reduce_max(input_tensor, axis=-1, keepdims=True)
+    concat = tf.concat([avg_pool, max_pool], axis=-1)
+    attention = layers.Conv2D(1, kernel_size=7, padding='same', activation='sigmoid')(concat)
+    return layers.Multiply()([input_tensor, attention])
+
+
+def cbam_attention(color_features, depth_features):
+    combined_features = Concatenate()([color_features, depth_features])
+    # Apply SE block for channel-wise attention
+    combined_features = se_block(combined_features)
+    # Apply spatial attention
+    combined_features = spatial_attention(combined_features)
+    return combined_features
+
+def dynamic_weights(color_features, depth_features):
+    combined_features = Concatenate()([color_features, depth_features])
+    gate = Dense(2, activation='softmax')(combined_features)  # Two weights
+    color_weight, depth_weight = tf.split(gate, 2, axis=-1)
+    return Multiply()([color_features, color_weight]), Multiply()([depth_features, depth_weight])
+
+
 # Create the model
-def create_model(use_efficientnet=False, use_flatten=False, neurons=None):
+def create_model(
+    use_efficientnet=False, 
+    use_flatten=False, 
+    neurons=None,
+    use_se_block=False, 
+    use_spatial_attention=False,
+    use_combined_attention=False,
+    use_dynamic_weights=False,
+):
     # Default neurons if not provided
     if neurons is None:
         neurons = {
@@ -121,10 +160,7 @@ def create_model(use_efficientnet=False, use_flatten=False, neurons=None):
         # EfficientNet backbone
         efficientnet_color = EfficientNetB0(include_top=False, weights='imagenet', input_shape=(COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS), name="efficientnetb0_color")
         color_features = efficientnet_color(color_input)
-        if use_flatten:
-            color_features = Flatten()(color_features)
-        else:
-            color_features = GlobalAveragePooling2D()(color_features)
+        color_features = Flatten()(color_features) if use_flatten else GlobalAveragePooling2D()(color_features)
     else:
         # Custom Conv2D backbone
         color_features = layers.Conv2D(64, (3, 3), activation='relu')(color_input)
@@ -132,6 +168,12 @@ def create_model(use_efficientnet=False, use_flatten=False, neurons=None):
         color_features = layers.Conv2D(128, (3, 3), activation='relu')(color_features)
         color_features = layers.MaxPooling2D((2, 2))(color_features)
         color_features = Flatten()(color_features) if use_flatten else GlobalAveragePooling2D()(color_features)
+
+    # Optionally apply SE block or spatial attention
+    if use_se_block:
+        color_features = se_block(color_features)  # Add Squeeze-and-Excitation block
+    if use_spatial_attention:
+        color_features = spatial_attention(color_features)  # Add Spatial Attention
 
     color_features = Dense(neurons['color_dense'], activation='relu')(color_features)
     color_features = Dropout(0.3)(color_features)
@@ -143,10 +185,7 @@ def create_model(use_efficientnet=False, use_flatten=False, neurons=None):
         # EfficientNet backbone
         efficientnet_depth = EfficientNetB0(include_top=False, weights=None, input_shape=(DEPTH_WIDTH, DEPTH_HEIGHT, DEPTH_CHANNELS), name="efficientnetb0_depth")
         depth_features = efficientnet_depth(depth_input)
-        if use_flatten:
-            depth_features = Flatten()(depth_features)
-        else:
-            depth_features = GlobalAveragePooling2D()(depth_features)
+        depth_features = Flatten()(depth_features) if use_flatten else GlobalAveragePooling2D()(depth_features)
     else:
         # Custom Conv2D backbone
         depth_features = layers.Conv2D(64, (3, 3), activation='relu')(depth_input)
@@ -155,20 +194,33 @@ def create_model(use_efficientnet=False, use_flatten=False, neurons=None):
         depth_features = layers.MaxPooling2D((2, 2))(depth_features)
         depth_features = Flatten()(depth_features) if use_flatten else GlobalAveragePooling2D()(depth_features)
 
+    # Optionally apply SE block or spatial attention
+    if use_se_block:
+        depth_features = se_block(depth_features)  # Add Squeeze-and-Excitation block
+    if use_spatial_attention:
+        depth_features = spatial_attention(depth_features)  # Add Spatial Attention
+
     depth_features = Dense(neurons['depth_dense'], activation='relu')(depth_features)
     depth_features = Dropout(0.3)(depth_features)
 
-    # Trainable weights for dynamic weighting
-    color_weight = Dense(1, activation='sigmoid', name='color_weight')(color_features)
-    depth_weight = Dense(1, activation='sigmoid', name='depth_weight')(depth_features)
+    # Combine features
+    if use_combined_attention:
+        # Use combined attention mechanism
+        combined_features = cbam_attention(color_features, depth_features)
+    elif use_dynamic_weights:
+        # Use dynamic weighting
+        weighted_color, weighted_depth = dynamic_weights(color_features, depth_features)
+        combined_features = Concatenate()([weighted_color, weighted_depth])
+    else:
+        # Default weighted combination
+        color_weight = Dense(1, activation='sigmoid', name='color_weight')(color_features)
+        depth_weight = Dense(1, activation='sigmoid', name='depth_weight')(depth_features)
+        weighted_color = Multiply()([color_features, color_weight])
+        weighted_depth = Multiply()([depth_features, depth_weight])
+        combined_features = Concatenate()([weighted_color, weighted_depth])
 
-    # Apply weights
-    weighted_color = Multiply()([color_features, color_weight])
-    weighted_depth = Multiply()([depth_features, depth_weight])
-
-    # Combine weighted features
-    combined = Concatenate()([weighted_color, weighted_depth])
-    x = Dense(neurons['combined_dense1'], activation='relu')(combined)
+    # Fully connected layers
+    x = Dense(neurons['combined_dense1'], activation='relu')(combined_features)
     x = Dropout(0.4)(x)
     x = Dense(neurons['combined_dense2'], activation='relu')(x)
     x = Dropout(0.3)(x)
@@ -194,7 +246,14 @@ if __name__ == '__main__':
     train_dataset = prepare_dataset(train_tfrecord, batch_size=batch_size, shuffle=True)
     val_dataset = prepare_dataset(val_tfrecord, batch_size=batch_size, shuffle=False)
 
-    model = create_model()
+    model = create_model(
+        use_efficientnet=False,      # Start with the custom Conv2D backbone for simplicity
+        use_flatten=False,           # Use GlobalAveragePooling2D to reduce feature dimensions
+        use_se_block=True,           # Enable SE blocks for channel-wise attention
+        use_spatial_attention=False, # Skip spatial attention initially
+        use_combined_attention=False,# Skip combined attention for now
+        use_dynamic_weights=True     # Enable dynamic weighting for color and depth features
+    )
     model.summary()
 
     # Callbacks
