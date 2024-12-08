@@ -212,9 +212,9 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
 
     # Process commands.csv and update paths
-    process_commands(commands_path, output_dir, 
-                     color_dir=color_image_dir,
-                     depth_dir=depth_image_dir)
+    # process_commands(commands_path, output_dir, 
+    #                  color_dir=color_image_dir,
+    #                  depth_dir=depth_image_dir)
 
     updated_commands_path = os.path.join(output_dir, 'commands.csv')
 
