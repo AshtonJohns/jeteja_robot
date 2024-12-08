@@ -4,7 +4,7 @@ BATCH_SIZE: 1
 COLOR_NORMALIZATION_FACTOR: 255.0 # For uint8 images
 COLOR_DATA_TYPE: "uint8" # If altered, include changes in the code
 COLOR_PREPROCESS_DATA_TYPE: 'float32'
-COLOR_ENCODING: 'rgb8' # corresponds to realsense RGB8 
+COLOR_ENCODING: 'brg8' # corresponds to realsense BGR8 
 COLOR_CHANNELS: 3
 COLOR_INPUT_IDX: 0 # TODO
 
