@@ -4,10 +4,10 @@ import pandas as pd
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import src.jeteja_launch.config.master_config as master_config
-from tensorflow.keras import mixed_precision
+from tensorflow.keras import mixed_precision, layers
 from tensorflow.keras.models import Model
 from tensorflow.keras.applications import EfficientNetB0
-from tensorflow.keras.layers import layers, Input, Dense, Flatten, Concatenate, Multiply, Dropout, GlobalAveragePooling2D
+from tensorflow.keras.layers import Input, Dense, Flatten, Concatenate, Multiply, Dropout, GlobalAveragePooling2D
 from utils.file_utilities import get_latest_directory
 from utils.training_utilities import write_run_trt_optimizer_script, write_savedmodel_to_onnx_script
 
@@ -19,6 +19,10 @@ DEPTH_HEIGHT = master_config.DEPTH_HEIGHT
 DEPTH_CHANNELS = master_config.DEPTH_CHANNELS
 PWM_PREPROCESS_DATA_TYPE = master_config.PWM_PREPROCESS_DATA_TYPE
 PWM_OUTPUT_DATA_TYPE = master_config.PWM_OUTPUT_DATA_TYPE
+
+# # debug
+# print(COLOR_WIDTH)
+# exit()
 
 # Enable memory growth
 physical_gpus = tf.config.list_physical_devices('GPU')
@@ -99,7 +103,7 @@ def prepare_dataset(tfrecord_path, batch_size, shuffle=True):
     return parsed_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
 # Create the model
-def create_model(use_efficientnet=True, use_flatten=True, neurons=None):
+def create_model(use_efficientnet=False, use_flatten=False, neurons=None):
     # Default neurons if not provided
     if neurons is None:
         neurons = {
@@ -184,7 +188,7 @@ def create_model(use_efficientnet=True, use_flatten=True, neurons=None):
 
 if __name__ == '__main__':
     # Training setup
-    batch_size = 24 # TODO
+    batch_size = 32 # TODO
     epochs = 100 # TODO
 
     train_dataset = prepare_dataset(train_tfrecord, batch_size=batch_size, shuffle=True)
