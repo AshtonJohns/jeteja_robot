@@ -188,7 +188,7 @@ def create_model(use_efficientnet=False, use_flatten=False, neurons=None):
 
 if __name__ == '__main__':
     # Training setup
-    batch_size = 32 # TODO
+    batch_size = 24 # TODO
     epochs = 100 # TODO
 
     train_dataset = prepare_dataset(train_tfrecord, batch_size=batch_size, shuffle=True)
