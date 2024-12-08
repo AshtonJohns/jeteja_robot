@@ -103,12 +103,19 @@ def prepare_dataset(tfrecord_path, batch_size, shuffle=True):
     return parsed_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
 def se_block(input_tensor, reduction_ratio=16):
+    # Check if the input tensor is 4D or 2D
+    if len(input_tensor.shape) == 4:  # 4D tensor
+        # Apply GlobalAveragePooling2D only if it's a 4D tensor
+        se = layers.GlobalAveragePooling2D()(input_tensor)
+    else:
+        # If it's already a 2D tensor, just use a Dense layer
+        se = input_tensor
+
     channels = input_tensor.shape[-1]
-    se = layers.GlobalAveragePooling2D()(input_tensor)
     se = layers.Dense(channels // reduction_ratio, activation='relu')(se)
     se = layers.Dense(channels, activation='sigmoid')(se)
-    return layers.Multiply()([input_tensor, se])
 
+    return layers.Multiply()([input_tensor, se])
 
 def spatial_attention(input_tensor):
     avg_pool = tf.reduce_mean(input_tensor, axis=-1, keepdims=True)
@@ -129,9 +136,13 @@ def cbam_attention(color_features, depth_features):
 def dynamic_weights(color_features, depth_features):
     combined_features = Concatenate()([color_features, depth_features])
     gate = Dense(2, activation='softmax')(combined_features)  # Two weights
-    color_weight, depth_weight = tf.split(gate, 2, axis=-1)
-    return Multiply()([color_features, color_weight]), Multiply()([depth_features, depth_weight])
 
+    # Use Lambda layer to perform tf.split operation
+    def split_gate(gate_tensor):
+        return tf.split(gate_tensor, 2, axis=-1)
+    
+    color_weight, depth_weight = layers.Lambda(split_gate)(gate)
+    return layers.Multiply()([color_features, color_weight]), layers.Multiply()([depth_features, depth_weight])
 
 # Create the model
 def create_model(
