@@ -24,19 +24,18 @@ PWM_OUTPUT_DATA_TYPE = master_config.PWM_OUTPUT_DATA_TYPE
 # print(COLOR_WIDTH)
 # exit()
 
-# Enable memory growth
+# Enable memory growth for each GPU
 physical_gpus = tf.config.list_physical_devices('GPU')
+
 if physical_gpus:
     try:
+        # Enable memory growth dynamically for each GPU
         for gpu in physical_gpus:
-            tf.config.set_logical_device_configuration(
-                gpu,
-                [tf.config.LogicalDeviceConfiguration(memory_limit=6144)]
-            )
+            tf.config.experimental.set_memory_growth(gpu, True)
     except RuntimeError as e:
-        print(e)
+        print(f"Error enabling memory growth: {e}")
 else:
-    raise Exception(f"No GPU detected for tensorflow {tf.__version__}.")
+    raise Exception(f"No GPU detected for TensorFlow {tf.__version__}.")
 
 # Enable mixed-precision training
 if PWM_OUTPUT_DATA_TYPE == np.float16:
@@ -91,7 +90,6 @@ def parse_tfrecord(example_proto):
     )
 
 
-
 # Prepare datasets
 def prepare_dataset(tfrecord_path, batch_size, shuffle=True):
     raw_dataset = tf.data.TFRecordDataset(tfrecord_path)
@@ -103,26 +101,36 @@ def prepare_dataset(tfrecord_path, batch_size, shuffle=True):
     return parsed_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
 def se_block(input_tensor, reduction_ratio=16):
-    # Check if the input tensor is 4D or 2D
-    if len(input_tensor.shape) == 4:  # 4D tensor
-        # Apply GlobalAveragePooling2D only if it's a 4D tensor
-        se = layers.GlobalAveragePooling2D()(input_tensor)
-    else:
-        # If it's already a 2D tensor, just use a Dense layer
-        se = input_tensor
+    channels = input_tensor.shape[-1]  # Number of channels in the input tensor
 
-    channels = input_tensor.shape[-1]
+    # Squeeze operation: Global average pooling
+    se = layers.GlobalAveragePooling2D()(input_tensor)
+
+    # Fully connected layers for excitation
     se = layers.Dense(channels // reduction_ratio, activation='relu')(se)
     se = layers.Dense(channels, activation='sigmoid')(se)
 
+    # Reshape to match input dimensions
+    se = layers.Reshape((1, 1, channels))(se)
+
+    # Scale input tensor by the excitation weights
     return layers.Multiply()([input_tensor, se])
 
+
 def spatial_attention(input_tensor):
-    avg_pool = tf.reduce_mean(input_tensor, axis=-1, keepdims=True)
-    max_pool = tf.reduce_max(input_tensor, axis=-1, keepdims=True)
-    concat = tf.concat([avg_pool, max_pool], axis=-1)
+    # Compute average and max pooling along the channel axis
+    avg_pool = layers.Lambda(lambda x: tf.reduce_mean(x, axis=-1, keepdims=True))(input_tensor)
+    max_pool = layers.Lambda(lambda x: tf.reduce_max(x, axis=-1, keepdims=True))(input_tensor)
+
+    # Concatenate the pooling outputs
+    concat = layers.Concatenate(axis=-1)([avg_pool, max_pool])
+
+    # Apply a convolutional layer to compute attention map
     attention = layers.Conv2D(1, kernel_size=7, padding='same', activation='sigmoid')(concat)
+
+    # Multiply the attention map with the input tensor
     return layers.Multiply()([input_tensor, attention])
+
 
 
 def cbam_attention(color_features, depth_features):
@@ -171,21 +179,21 @@ def create_model(
         # EfficientNet backbone
         efficientnet_color = EfficientNetB0(include_top=False, weights='imagenet', input_shape=(COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS), name="efficientnetb0_color")
         color_features = efficientnet_color(color_input)
-        color_features = Flatten()(color_features) if use_flatten else GlobalAveragePooling2D()(color_features)
     else:
         # Custom Conv2D backbone
         color_features = layers.Conv2D(64, (3, 3), activation='relu')(color_input)
         color_features = layers.MaxPooling2D((2, 2))(color_features)
         color_features = layers.Conv2D(128, (3, 3), activation='relu')(color_features)
         color_features = layers.MaxPooling2D((2, 2))(color_features)
-        color_features = Flatten()(color_features) if use_flatten else GlobalAveragePooling2D()(color_features)
 
-    # Optionally apply SE block or spatial attention
+    # Apply SE block or spatial attention BEFORE reducing spatial dimensions
     if use_se_block:
-        color_features = se_block(color_features)  # Add Squeeze-and-Excitation block
+        color_features = se_block(color_features)  # Apply SE block to the 4D tensor
     if use_spatial_attention:
-        color_features = spatial_attention(color_features)  # Add Spatial Attention
+        color_features = spatial_attention(color_features)  # Apply Spatial Attention
 
+    # Reduce spatial dimensions after attention mechanisms
+    color_features = Flatten()(color_features) if use_flatten else GlobalAveragePooling2D()(color_features)
     color_features = Dense(neurons['color_dense'], activation='relu')(color_features)
     color_features = Dropout(0.3)(color_features)
 
@@ -196,21 +204,21 @@ def create_model(
         # EfficientNet backbone
         efficientnet_depth = EfficientNetB0(include_top=False, weights=None, input_shape=(DEPTH_WIDTH, DEPTH_HEIGHT, DEPTH_CHANNELS), name="efficientnetb0_depth")
         depth_features = efficientnet_depth(depth_input)
-        depth_features = Flatten()(depth_features) if use_flatten else GlobalAveragePooling2D()(depth_features)
     else:
         # Custom Conv2D backbone
         depth_features = layers.Conv2D(64, (3, 3), activation='relu')(depth_input)
         depth_features = layers.MaxPooling2D((2, 2))(depth_features)
         depth_features = layers.Conv2D(128, (3, 3), activation='relu')(depth_features)
         depth_features = layers.MaxPooling2D((2, 2))(depth_features)
-        depth_features = Flatten()(depth_features) if use_flatten else GlobalAveragePooling2D()(depth_features)
 
-    # Optionally apply SE block or spatial attention
+    # Apply SE block or spatial attention BEFORE reducing spatial dimensions
     if use_se_block:
-        depth_features = se_block(depth_features)  # Add Squeeze-and-Excitation block
+        depth_features = se_block(depth_features)  # Apply SE block to the 4D tensor
     if use_spatial_attention:
-        depth_features = spatial_attention(depth_features)  # Add Spatial Attention
+        depth_features = spatial_attention(depth_features)  # Apply Spatial Attention
 
+    # Reduce spatial dimensions after attention mechanisms
+    depth_features = Flatten()(depth_features) if use_flatten else GlobalAveragePooling2D()(depth_features)
     depth_features = Dense(neurons['depth_dense'], activation='relu')(depth_features)
     depth_features = Dropout(0.3)(depth_features)
 
@@ -248,7 +256,6 @@ def create_model(
     return model
 
 
-
 if __name__ == '__main__':
     # Training setup
     batch_size = 24 # TODO
@@ -261,7 +268,7 @@ if __name__ == '__main__':
         use_efficientnet=False,      # Start with the custom Conv2D backbone for simplicity
         use_flatten=False,           # Use GlobalAveragePooling2D to reduce feature dimensions
         use_se_block=True,           # Enable SE blocks for channel-wise attention
-        use_spatial_attention=False, # Skip spatial attention initially
+        use_spatial_attention=True, # Skip spatial attention initially
         use_combined_attention=False,# Skip combined attention for now
         use_dynamic_weights=True     # Enable dynamic weighting for color and depth features
     )
