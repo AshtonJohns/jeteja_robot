@@ -59,12 +59,12 @@ with open(realsense2_camera_config, 'r') as file:
     config = yaml.safe_load(file)
 
 # Color camera settings
-COLOR_HEIGHT = int(config['rgb_camera.color_profile'].split("x")[0]) # TODO should be int!
-COLOR_WIDTH = int(config['rgb_camera.color_profile'].split("x")[1])
+COLOR_HEIGHT = int(config['rgb_camera.color_profile'].split("x")[1]) # TODO should be int!
+COLOR_WIDTH = int(config['rgb_camera.color_profile'].split("x")[0])
 COLOR_FORMAT = config['rgb_camera.color_format']
 
-DEPTH_HEIGHT = int(config['depth_module.depth_profile'].split("x")[0])
-DEPTH_WIDTH = int(config['depth_module.depth_profile'].split("x")[1])
+DEPTH_HEIGHT = int(config['depth_module.depth_profile'].split("x")[1])
+DEPTH_WIDTH = int(config['depth_module.depth_profile'].split("x")[0])
 DEPTH_FORMAT = config['depth_module.depth_format']
 
 
