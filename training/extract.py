@@ -44,7 +44,10 @@ def extract_rosbag(bag_files, output_dir):
     # CSV file for commands
     csv_file = open(os.path.join(output_dir, 'commands.csv'), 'w', newline='')
     csv_writer = csv.writer(csv_file)
-    csv_writer.writerow(['color_image_filename', 'depth_image_filename', 'motor_pwm', 'steering_pwm'])
+    if TRAIN_COLOR and TRAIN_DEPTH:
+        csv_writer.writerow(['color_image_filename', 'depth_image_filename', 'motor_pwm', 'steering_pwm'])
+    elif TRAIN_COLOR:
+        csv_writer.writerow(['color_image_filename', 'motor_pwm', 'steering_pwm'])
 
     bridge = image_processing.get_cvbridge()
     reader = SequentialReader()
