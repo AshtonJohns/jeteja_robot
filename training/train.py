@@ -1,19 +1,22 @@
+import path
 import os
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 import matplotlib.pyplot as plt
-import src.jeteja_launch.config.master_config as master_config
+import jeteja_launch.config.master_config as master_config
 from tensorflow.keras import mixed_precision, layers
 from tensorflow.keras.models import Model
 from tensorflow.keras.applications import EfficientNetB0
 from tensorflow.keras.layers import Input, Dense, Flatten, Concatenate, Multiply, Dropout, GlobalAveragePooling2D
-from utils.file_utilities import get_latest_directory
-from utils.training_utilities import write_run_trt_optimizer_script, write_savedmodel_to_onnx_script
+from file_utilities import get_latest_directory
+from training_utilities import write_run_trt_optimizer_script_color_depth, write_run_trt_optimizer_script_color, write_savedmodel_to_onnx_script
 
+TRAIN_COLOR = master_config.TRAIN_COLOR
 COLOR_WIDTH = master_config.COLOR_WIDTH
 COLOR_HEIGHT = master_config.COLOR_HEIGHT
 COLOR_CHANNELS = master_config.COLOR_CHANNELS
+TRAIN_DEPTH = master_config.TRAIN_DEPTH
 DEPTH_WIDTH = master_config.DEPTH_WIDTH
 DEPTH_HEIGHT = master_config.DEPTH_HEIGHT
 DEPTH_CHANNELS = master_config.DEPTH_CHANNELS
@@ -56,27 +59,54 @@ val_tfrecord = os.path.join(DATA_DIR, "val.tfrecord")
 assert os.path.exists(train_tfrecord), f"Train TFRecord not found: {train_tfrecord}"
 assert os.path.exists(val_tfrecord), f"Validation TFRecord not found: {val_tfrecord}"
 
+# Get feature description
+def get_feature_description():
+    if TRAIN_COLOR and TRAIN_DEPTH:
+        feature_description = {
+            'color_image': tf.io.FixedLenFeature([], tf.string),
+            'depth_image': tf.io.FixedLenFeature([], tf.string),
+            'motor_pwm': tf.io.FixedLenFeature([], PWM_PREPROCESS_DATA_TYPE),  
+            'steering_pwm': tf.io.FixedLenFeature([], PWM_PREPROCESS_DATA_TYPE),
+        }
+    elif TRAIN_COLOR:
+        feature_description = {
+            'color_image': tf.io.FixedLenFeature([], tf.string),
+            'motor_pwm': tf.io.FixedLenFeature([], PWM_PREPROCESS_DATA_TYPE),  
+            'steering_pwm': tf.io.FixedLenFeature([], PWM_PREPROCESS_DATA_TYPE),
+        }
+    return feature_description
+
+def get_decoded_reshaped_image(parsed_features, image_height, image_width, image_channels):
+    # Decode images from serialized bytes
+    decoded_image = tf.io.decode_raw(parsed_features['color_image'], PWM_PREPROCESS_DATA_TYPE)
+    reshaped_image = tf.reshape(decoded_image, (image_height, image_width, image_channels))  # Reshape images to their correct dimensions
+    return reshaped_image
+
 # Parse TFRecord
 def parse_tfrecord(example_proto):
-    feature_description = {
-        'color_image': tf.io.FixedLenFeature([], tf.string),
-        'depth_image': tf.io.FixedLenFeature([], tf.string),
-        'motor_pwm': tf.io.FixedLenFeature([], PWM_PREPROCESS_DATA_TYPE),  # Use float32 if normalized
-        'steering_pwm': tf.io.FixedLenFeature([], PWM_PREPROCESS_DATA_TYPE),  # Use float32 if normalized
-    }
+
+    feature_description = get_feature_description()
+    
     parsed_features = tf.io.parse_single_example(example_proto, feature_description)
-
-    # Decode images from serialized bytes
-    color_image = tf.io.decode_raw(parsed_features['color_image'], PWM_PREPROCESS_DATA_TYPE)
-    depth_image = tf.io.decode_raw(parsed_features['depth_image'], PWM_PREPROCESS_DATA_TYPE)
-
-    # Reshape images to their correct dimensions
-    color_image = tf.reshape(color_image, (COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS))
-    depth_image = tf.reshape(depth_image, (DEPTH_WIDTH, DEPTH_HEIGHT, DEPTH_CHANNELS))
 
     # Motor and Steering PWM are already normalized to [0, 1] during serialization
     motor_pwm = parsed_features['motor_pwm']
     steering_pwm = parsed_features['steering_pwm']
+
+
+    if TRAIN_COLOR and TRAIN_DEPTH:
+        color_image = get_decoded_reshaped_image(parsed_features, COLOR_HEIGHT, COLOR_WIDTH, COLOR_CHANNELS)
+        depth_image = get_decoded_reshaped_image(parsed_features, DEPTH_HEIGHT, DEPTH_WIDTH, DEPTH_CHANNELS)
+        parsed_tfrecord = (
+            {"color_input": color_image, "depth_input": depth_image},
+            {"motor_pwm": motor_pwm, "steering_pwm": steering_pwm},
+        )
+    elif TRAIN_COLOR:
+        color_image = get_decoded_reshaped_image(parsed_features, COLOR_HEIGHT, COLOR_WIDTH, COLOR_CHANNELS)
+        parsed_tfrecord = (
+            {"color_input": color_image},
+            {"motor_pwm": motor_pwm, "steering_pwm": steering_pwm},
+        )
 
     # # Debugging: Print shapes and ranges
     # tf.print("Parsed color image shape:", tf.shape(color_image))
@@ -84,10 +114,7 @@ def parse_tfrecord(example_proto):
     # tf.print("Parsed motor PWM:", motor_pwm)
     # tf.print("Parsed steering PWM:", steering_pwm)
 
-    return (
-        {"color_input": color_image, "depth_input": depth_image},
-        {"motor_pwm": motor_pwm, "steering_pwm": steering_pwm},
-    )
+    return parsed_tfrecord
 
 
 # Prepare datasets
@@ -173,11 +200,11 @@ def create_model(
         }
 
     # Color input and features
-    color_input = Input(shape=(COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS), name='color_input')
+    color_input = Input(shape=(COLOR_HEIGHT, COLOR_WIDTH, COLOR_CHANNELS), name='color_input')
     
     if use_efficientnet:
         # EfficientNet backbone
-        efficientnet_color = EfficientNetB0(include_top=False, weights='imagenet', input_shape=(COLOR_WIDTH, COLOR_HEIGHT, COLOR_CHANNELS), name="efficientnetb0_color")
+        efficientnet_color = EfficientNetB0(include_top=False, weights='imagenet', input_shape=(COLOR_HEIGHT, COLOR_WIDTH, COLOR_CHANNELS), name="efficientnetb0_color")
         color_features = efficientnet_color(color_input)
     else:
         # Custom Conv2D backbone
@@ -198,11 +225,11 @@ def create_model(
     color_features = Dropout(0.3)(color_features)
 
     # Depth input and features
-    depth_input = Input(shape=(DEPTH_WIDTH, DEPTH_HEIGHT, DEPTH_CHANNELS), name='depth_input')
+    depth_input = Input(shape=(DEPTH_HEIGHT, DEPTH_WIDTH, DEPTH_CHANNELS), name='depth_input')
 
     if use_efficientnet:
         # EfficientNet backbone
-        efficientnet_depth = EfficientNetB0(include_top=False, weights=None, input_shape=(DEPTH_WIDTH, DEPTH_HEIGHT, DEPTH_CHANNELS), name="efficientnetb0_depth")
+        efficientnet_depth = EfficientNetB0(include_top=False, weights=None, input_shape=(DEPTH_HEIGHT, DEPTH_WIDTH, DEPTH_CHANNELS), name="efficientnetb0_depth")
         depth_features = efficientnet_depth(depth_input)
     else:
         # Custom Conv2D backbone
@@ -267,10 +294,10 @@ if __name__ == '__main__':
     model = create_model(
         use_efficientnet=False,      # Start with the custom Conv2D backbone for simplicity
         use_flatten=False,           # Use GlobalAveragePooling2D to reduce feature dimensions
-        use_se_block=True,           # Enable SE blocks for channel-wise attention
-        use_spatial_attention=True, # Skip spatial attention initially
+        use_se_block=False,           # Enable SE blocks for channel-wise attention
+        use_spatial_attention=False,  # Skip spatial attention initially
         use_combined_attention=False,# Skip combined attention for now
-        use_dynamic_weights=True     # Enable dynamic weighting for color and depth features
+        use_dynamic_weights=False     # Enable dynamic weighting for color and depth features
     )
     model.summary()
 
@@ -311,8 +338,12 @@ if __name__ == '__main__':
     # Write bash scripts
     write_savedmodel_to_onnx_script(os.path.join(MODEL_DIR, 'convert_onnx.bash'))
 
-    write_run_trt_optimizer_script(COLOR_WIDTH, COLOR_HEIGHT, DEPTH_WIDTH, DEPTH_HEIGHT,
-                    os.path.join(MODEL_DIR, 'run_trt.bash'))
+    if TRAIN_COLOR and TRAIN_DEPTH:
+        write_run_trt_optimizer_script_color_depth(COLOR_WIDTH, COLOR_HEIGHT, DEPTH_WIDTH, DEPTH_HEIGHT, 
+                                                   os.path.join(MODEL_DIR, 'run_trt.bash'))
+    elif TRAIN_COLOR:
+        write_run_trt_optimizer_script_color(COLOR_WIDTH, COLOR_HEIGHT,
+                                             os.path.join(MODEL_DIR, 'run_trt.bash'))
 
     history_df = pd.DataFrame(history.history)
     history_df.to_csv(os.path.join(MODEL_DIR, "training_history.csv"), index=False)

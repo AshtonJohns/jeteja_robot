@@ -1,3 +1,4 @@
+import path
 import re
 import tensorflow as tf
 import glob
@@ -5,13 +6,15 @@ import os
 import pandas as pd
 import cv2
 import numpy as np
-import src.jeteja_launch.scripts.image_processing as image_processing
-from utils.file_utilities import get_latest_directory, get_files_from_directory, get_files_from_subdirectory
+import jeteja_launch.scripts.image_processing as image_processing
+from file_utilities import get_latest_directory, get_files_from_directory, get_files_from_subdirectory
 
 from sklearn.model_selection import train_test_split
 import src.jeteja_launch.config.master_config as master_config
 
+TRAIN_COLOR = master_config.TRAIN_COLOR
 COLOR_DATA_TYPE = master_config.COLOR_DATA_TYPE
+TRAIN_DEPTH = master_config.TRAIN_DEPTH
 DEPTH_DATA_TYPE = master_config.DEPTH_DATA_TYPE
 COLOR_NORMALIZATION_FACTOR = master_config.COLOR_NORMALIZATION_FACTOR
 DEPTH_NORMALIZATION_FACTOR = master_config.DEPTH_NORMALIZATION_FACTOR
@@ -35,29 +38,31 @@ def process_commands(commands_path, output_dir, **kwargs):
         -   color_dir: Directory containing color images
         -   depth_dir: Directory containing depth images
     """
-    color_dir = kwargs.get('color_dir', False)
-    depth_dir = kwargs.get('depth_dir', False)
+    if TRAIN_COLOR:
+        color_dir = kwargs.get('color_dir', False)
 
-    image_files = get_files_from_directory(color_dir) # list of color files
+        image_files = get_files_from_directory(color_dir) # list of color files
 
-    # Load the CSV file into a DataFrame
-    commands_df = pd.read_csv(commands_path)
+        # Load the CSV file into a DataFrame
+        commands_df = pd.read_csv(commands_path)
 
-    # Process color image filenames
-    if color_dir and 'color_image_filename' in commands_df.columns:
-        print("Validating color image filenames...")
-        commands_df['color_image_filename'] = commands_df['color_image_filename'].apply(
-            lambda x: find_image(x, color_dir, image_files) if pd.notnull(x) else None
-        )
+        # Process color image filenames
+        if color_dir and 'color_image_filename' in commands_df.columns:
+            print("Validating color image filenames...")
+            commands_df['color_image_filename'] = commands_df['color_image_filename'].apply(
+                lambda x: find_image(x, color_dir, image_files) if pd.notnull(x) else None
+            )
+    
+    if TRAIN_DEPTH:
+        depth_dir = kwargs.get('depth_dir', False)
+        image_files = get_files_from_directory(depth_dir) # list of depth files
 
-    image_files = get_files_from_directory(depth_dir) # list of depth files
-
-    # Process depth image filenames
-    if depth_dir and 'depth_image_filename' in commands_df.columns:
-        print("Validating depth image filenames...")
-        commands_df['depth_image_filename'] = commands_df['depth_image_filename'].apply(
-            lambda x: find_image(x, depth_dir, image_files) if pd.notnull(x) else None
-        )
+        # Process depth image filenames
+        if depth_dir and 'depth_image_filename' in commands_df.columns:
+            print("Validating depth image filenames...")
+            commands_df['depth_image_filename'] = commands_df['depth_image_filename'].apply(
+                lambda x: find_image(x, depth_dir, image_files) if pd.notnull(x) else None
+            )
 
     # Remove rows where either color or depth image is missing
     commands_df.dropna(subset=['color_image_filename', 'depth_image_filename'], inplace=True)
@@ -126,41 +131,49 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
     """
     with tf.io.TFRecordWriter(output_path) as writer:
         for _, row in commands_df.iterrows():
-            color_image_path = os.path.join(color_dir, row['color_image_filename'])
-            depth_image_path = os.path.join(depth_dir, row['depth_image_filename'])
 
-            # Load and process images
-            color_image = cv2.imread(color_image_path)
-            depth_image = cv2.imread(depth_image_path, cv2.IMREAD_UNCHANGED)
+            if TRAIN_COLOR:
+                color_image_path = os.path.join(color_dir, row['color_image_filename'])
+                # Load and process images
+                color_image = cv2.imread(color_image_path)
+                if color_image is None:
+                    print(f"Skipping row due to missing images: {row}")
+                    continue
+                # Validate image types
+                if color_image.dtype != COLOR_DATA_TYPE:
+                    raise Exception(f"Color image is not uint8. Found: {color_image.dtype}")
+                # Normalize color image to [0, 1]
+                color_image = image_processing.normalize_image(color_image,color=True)
+            else:
+                color_image = None
 
-            if color_image is None or depth_image is None:
-                print(f"Skipping row due to missing images: {row}")
-                continue
+            if TRAIN_DEPTH:
+                depth_image_path = os.path.join(depth_dir, row['depth_image_filename'])
+                depth_image = cv2.imread(depth_image_path, cv2.IMREAD_UNCHANGED)
+                if depth_image is None:
+                    print(f"Skipping row due to missing images: {row}")
+                    continue
+                if depth_image.dtype != DEPTH_DATA_TYPE:
+                    raise Exception(f"Depth image is not uint16. Found: {depth_image.dtype}")
+                # Normalize depth image to range [0, 1]
+                depth_image = image_processing.normalize_image(depth_image,depth=True)
+            else:
+                depth_image = None
 
-            # Validate image types
-            if color_image.dtype != COLOR_DATA_TYPE:
-                raise Exception(f"Color image is not uint8. Found: {color_image.dtype}")
-            if depth_image.dtype != DEPTH_DATA_TYPE:
-                raise Exception(f"Depth image is not uint16. Found: {depth_image.dtype}")
-
-            # Normalize color image to [0, 1]
-            color_image = image_processing.normalize_image(color_image,color=True)
-            # Normalize depth image to range [0, 1]
-            depth_image = image_processing.normalize_image(depth_image,depth=True)
-
-            if len(depth_image.shape) == 2:
-                depth_image = np.expand_dims(depth_image, axis=-1)  # Add channel dimension
+                if len(depth_image.shape) == 2:
+                    depth_image = np.expand_dims(depth_image, axis=-1)  # Add channel dimension
 
             # Normalize PWM values to [0, 1]
             motor_pwm_normalized = (row['motor_pwm'] - MOTOR_MIN_DUTY_CYLE) / MOTOR_PWM_NORMALIZATION_FACTOR
             steering_pwm_normalized = (row['steering_pwm'] - STEERING_MIN_DUTY_CYCLE) / STEERING_PWM_NORMALIZATION_FACTOR
+
             # Debugging
-            print(f"Color image range: {color_image.min()} to {color_image.max()}")
-            print(f"Depth image range: {depth_image.min()} to {depth_image.max()}")
-            print(f"Color image shape before serialization: {color_image.shape}, dtype: {color_image.dtype}")
-            print(f"Depth image shape before serialization: {depth_image.shape}, dtype: {depth_image.dtype}")
-            print(f"Normalized motor pwm: {motor_pwm_normalized}")
-            print(f"Normalized steering pwm: {steering_pwm_normalized}")
+            # print(f"Color image range: {color_image.min()} to {color_image.max()}")
+            # print(f"Depth image range: {depth_image.min()} to {depth_image.max()}")
+            # print(f"Color image shape before serialization: {color_image.shape}, dtype: {color_image.dtype}")
+            # print(f"Depth image shape before serialization: {depth_image.shape}, dtype: {depth_image.dtype}")
+            # print(f"Normalized motor pwm: {motor_pwm_normalized}")
+            # print(f"Normalized steering pwm: {steering_pwm_normalized}")
 
             # Serialize data
             example = serialize_example(
@@ -169,6 +182,7 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
                 motor_pwm=motor_pwm_normalized,
                 steering_pwm=steering_pwm_normalized
             )
+            
             writer.write(example)
 
     print(f"TFRecord saved to {output_path}")
@@ -187,12 +201,20 @@ def serialize_example(color_image, depth_image, motor_pwm, steering_pwm):
     Returns:
         Serialized tf.train.Example.
     """
-    feature = {
-        'color_image': tf.train.Feature(bytes_list=tf.train.BytesList(value=[color_image.tobytes()])),
-        'depth_image': tf.train.Feature(bytes_list=tf.train.BytesList(value=[depth_image.tobytes()])),
-        'motor_pwm': tf.train.Feature(float_list=tf.train.FloatList(value=[motor_pwm])),
-        'steering_pwm': tf.train.Feature(float_list=tf.train.FloatList(value=[steering_pwm])),
-    }
+
+    if TRAIN_COLOR and TRAIN_DEPTH:
+        feature = {
+            'color_image': tf.train.Feature(bytes_list=tf.train.BytesList(value=[color_image.tobytes()])),
+            'depth_image': tf.train.Feature(bytes_list=tf.train.BytesList(value=[depth_image.tobytes()])),
+            'motor_pwm': tf.train.Feature(float_list=tf.train.FloatList(value=[motor_pwm])),
+            'steering_pwm': tf.train.Feature(float_list=tf.train.FloatList(value=[steering_pwm])),
+        }
+    elif TRAIN_COLOR:
+        feature = {
+            'color_image': tf.train.Feature(bytes_list=tf.train.BytesList(value=[color_image.tobytes()])),
+            'motor_pwm': tf.train.Feature(float_list=tf.train.FloatList(value=[motor_pwm])),
+            'steering_pwm': tf.train.Feature(float_list=tf.train.FloatList(value=[steering_pwm])),
+        }
     return tf.train.Example(features=tf.train.Features(feature=feature)).SerializeToString()
 
 

@@ -33,22 +33,21 @@ class AutopilotInferenceHandler(Node):
 
     def color_callback(self, msg):
         # Convert ROS Image message to NumPy array
-        self.color_image = image_processing.deserialized_ros_to_cv(msg, color=True)
+        color_image = image_processing.deserialized_ros_to_cv(msg, color=True)
+        self.color_image = image_processing.normalize_image(color_image, color=True)
         self.process_and_publish()
 
     def depth_callback(self, msg):
         # Convert ROS Image message to NumPy array
-        self.depth_image = image_processing.deserialized_ros_to_cv(msg, depth=True)
+        depth_image = image_processing.deserialized_ros_to_cv(msg, depth=True)
+        self.depth_image = image_processing.normalize_image(depth_image, depth=True)
         self.process_and_publish()
 
     def process_and_publish(self):
-        if self.color_image is not None and self.depth_image is not None:
-            # Preprocess color and depth images
-            color_image = image_processing.normalize_image(self.color_image,color=True)
-            depth_image = image_processing.normalize_image(self.depth_image,depth=True)
+        if self.color_image is not None:
 
             # Infer images
-            outputs = self.trt_infer.infer(color_image, depth_image)
+            outputs = self.trt_infer.infer_color(self.color_image)
             motor_pwm, steering_pwm = image_processing.denormalize_pwm(outputs)
 
             # DEBUG

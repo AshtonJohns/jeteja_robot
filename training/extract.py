@@ -1,10 +1,11 @@
+import path
 import os
 import cv2
 import csv
 import yaml
-import src.jeteja_launch.config.master_config as  master_config
-import src.jeteja_launch.scripts.image_processing as image_processing
-from utils.file_utilities import get_files_from_directory, get_latest_directory, sort_files, get_files_from_subdirectory
+import jeteja_launch.config.master_config as  master_config
+import jeteja_launch.scripts.image_processing as image_processing
+from file_utilities import get_files_from_directory, get_latest_directory, sort_files, get_files_from_subdirectory
 from ament_index_python.packages import get_package_share_directory
 from rclpy.serialization import deserialize_message
 from sensor_msgs.msg import Image
@@ -43,7 +44,7 @@ def extract_rosbag(bag_files, output_dir):
     csv_writer = csv.writer(csv_file)
     csv_writer.writerow(['color_image_filename', 'depth_image_filename', 'motor_pwm', 'steering_pwm'])
 
-    bridge = CvBridge()
+    bridge = image_processing.get_cvbridge()
     reader = SequentialReader()
 
     for bag_path in bag_files:

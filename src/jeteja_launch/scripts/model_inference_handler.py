@@ -68,7 +68,7 @@ class TensorRTInference:
             print(f"  Shape: {tensor_shape}")
             print(f"  Data Type: {tensor_dtype}")
 
-    def infer(self, color_image, depth_image):
+    def infer_color_depth(self, color_image, depth_image):
         """Run inference on input images."""
 
         # print(f"Color Image: shape={color_image.shape}, dtype={color_image.dtype}, range=({color_image.min()}, {color_image.max()})")
@@ -82,6 +82,30 @@ class TensorRTInference:
         bindings = [None] * self.engine.num_io_tensors
         bindings[self.color_input_idx] = int(self.d_color_input)
         bindings[self.depth_input_idx] = int(self.d_depth_input)
+        bindings[self.output_0_idx] = int(self.d_output_0)
+        bindings[self.output_1_idx] = int(self.d_output_1)
+
+        self.context.execute_v2(bindings)
+
+        # Transfer output back to host
+        cuda.memcpy_dtoh(self.h_output_0, self.d_output_0)
+        cuda.memcpy_dtoh(self.h_output_1, self.d_output_1)
+
+        return self.h_output_0, self.h_output_1
+    
+
+    def infer_color(self, color_image):
+        """Run inference on input images."""
+
+        # print(f"Color Image: shape={color_image.shape}, dtype={color_image.dtype}, range=({color_image.min()}, {color_image.max()})")
+        # print(f"Depth Image: shape={depth_image.shape}, dtype={depth_image.dtype}, range=({depth_image.min()}, {depth_image.max()})")
+
+        # Transfer data to device
+        cuda.memcpy_htod(self.d_color_input, color_image)
+
+        # Perform inference
+        bindings = [None] * self.engine.num_io_tensors
+        bindings[self.color_input_idx] = int(self.d_color_input)
         bindings[self.output_0_idx] = int(self.d_output_0)
         bindings[self.output_1_idx] = int(self.d_output_1)
 

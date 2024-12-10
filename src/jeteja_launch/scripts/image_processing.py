@@ -25,6 +25,7 @@ bridge = CvBridge()
 
 
 def denormalize_pwm(outputs):
+    """"""
     motor_pwm = outputs[0][0][0] * (MOTOR_MAX_DUTY_CYCLE - MOTOR_MIN_DUTY_CYCLE) + MOTOR_MIN_DUTY_CYCLE
     steering_pwm = outputs[1][0][0] * (STEERING_MAX_DUTY_CYCLE - STEERING_MIN_DUTY_CYCLE) + STEERING_MIN_DUTY_CYCLE
 

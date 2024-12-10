@@ -74,6 +74,8 @@ with open(autopilot_config, 'r') as file:
 
 # Extract parameters from the YAML configuration
 MODEL_PATH = config.get('MODEL_PATH')
+TRAIN_COLOR = config.get('TRAIN_COLOR')
+TRAIN_DEPTH = config.get('TRAIN_DEPTH')
 
 COLOR_NORMALIZATION_FACTOR = config.get('COLOR_NORMALIZATION_FACTOR')
 COLOR_DATA_TYPE = config.get('COLOR_DATA_TYPE')
