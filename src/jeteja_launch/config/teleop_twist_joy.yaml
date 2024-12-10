@@ -6,7 +6,7 @@ teleop_twist_joy_node:
     axis_linear:
       x: 1  # Left stick Y-axis (adjust based on your joystick mapping)
     scale_linear:
-      x: 0.15
+      x: 0.17
     scale_linear_turbo:
       x: 1.5
 
