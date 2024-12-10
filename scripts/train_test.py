@@ -111,9 +111,12 @@ test_dataloader = DataLoader(test_data, batch_size=125)
 model = convnets.DonkeyNet().to(DEVICE)  # Adjust input channels to 3 (RGB only)
 # Hyper-parameters
 lr = 0.002
-optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0.0001)
+optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 loss_fn = standard_loss
-epochs = 15
+epochs = 32
+patience = 7
+best_loss = float('inf')  # best loss on test data
+best_counter = 0
 train_losses = []
 test_losses = []
 for t in range(epochs):
@@ -123,6 +126,26 @@ for t in range(epochs):
     print(f"epoch {t + 1} training loss: {ep_train_loss}, testing loss: {ep_test_loss}")
     train_losses.append(ep_train_loss)
     test_losses.append(ep_test_loss)
+    # Early stopping
+    if ep_test_loss < best_loss:
+        best_loss = ep_test_loss
+        best_counter = 0  # Reset counter if validation loss improved
+        try:
+            os.remove(os.path.join(data_dir, f'{model_name}.pth'))
+            print(f"Last best model file has been deleted successfully.")
+        except FileNotFoundError:
+            print(f"File '{os.path.join(data_dir, f'{model_name}.pth')}' not found.")
+        except Exception as e:
+            print(f"Error occurred while deleting the file: {e}")
+        model_name = f'{model._get_name()}-{ep+1}ep-{learning_rate}lr-{ep_test_loss:.4f}mse'
+        torch.save(model.state_dict(), os.path.join(data_dir, f'{model_name}.pth'))
+        print(f"Best model saved as '{os.path.join(data_dir, f'{model_name}.pth')}'")
+    else:
+        best_counter += 1
+        print(f"{best_counter} epochs since best model")
+        if best_counter >= patience:
+            print("Early stopping triggered!")
+            break
 
 print("Optimization Done!")
 
@@ -137,7 +160,7 @@ plt.yticks(np.arange(0, 0.11, 0.01))  # Set y-axis ticks from 0 to 0.1 in steps 
 plt.grid(True)
 plt.legend()
 plt.title(pilot_title)
-plt.savefig(os.path.join(data_dir, f'{pilot_title}.png'))
+plt.savefig(os.path.join(data_dir, f'{model_name}.png'))
 
 # Save the model (weights only)
 torch.save(model.state_dict(), os.path.join(data_dir, f'{pilot_title}.pth'))
@@ -145,6 +168,6 @@ print("Model weights saved")
 
 # ONNX export
 dummy_input = torch.randn(1, 3, 120, 160).to(DEVICE)  # Adjust shape for 120x160 RGB
-onnx_model_path = os.path.join(data_dir, f'{pilot_title}.onnx')
+onnx_model_path = os.path.join(data_dir, f'{model_name}.onnx')
 torch.onnx.export(model, dummy_input, onnx_model_path, opset_version=11)
 print(f"Model exported to ONNX format at: {onnx_model_path}")
