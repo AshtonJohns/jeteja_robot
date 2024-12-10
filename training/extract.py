@@ -15,7 +15,9 @@ from rosbag2_py import SequentialReader, StorageOptions, ConverterOptions
 from rosidl_runtime_py.utilities import get_message
 
 COLOR_ENCODING = master_config.COLOR_ENCODING
+TRAIN_COLOR = master_config.TRAIN_COLOR
 DEPTH_ENCODING = master_config.DEPTH_ENCODING
+TRAIN_DEPTH = master_config.TRAIN_DEPTH
 
 
 def extract_rosbag(bag_files, output_dir):
@@ -97,11 +99,18 @@ def extract_rosbag(bag_files, output_dir):
                 timestamp_str = f"{sec}_{nanosec}"
 
                 # Match image filenames for commands
-                color_image_filename = f"color_{timestamp_str}.jpg"
-                depth_image_filename = f"depth_{timestamp_str}.png"
+                row = [] 
+                if TRAIN_COLOR:
+                    color_image_filename = f"color_{timestamp_str}.jpg"
+                    row.append(color_image_filename)
+                if TRAIN_DEPTH:
+                    depth_image_filename = f"depth_{timestamp_str}.png"
+                    row.append(depth_image_filename)
+
+                row.extend([motor_pwm, steering_pwm])
 
                 # Save the command to the CSV
-                csv_writer.writerow([color_image_filename, depth_image_filename, motor_pwm, steering_pwm])
+                csv_writer.writerow(row)
 
             # Process laser scan data
             elif topic == '/scan':
