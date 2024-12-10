@@ -1,6 +1,6 @@
 TRAIN_COLOR: True
 TRAIN_DEPTH: False
-MODEL_PATH: /home/ucajetson/jeteja_robot/data/models/2024-12-07_20-38-14/model.trt
+MODEL_PATH: /home/ucajetson/jeteja_robot/data/models/2024-12-09_21-51-01/model.trt
 BATCH_SIZE: 1
 
 
