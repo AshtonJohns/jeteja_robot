@@ -10,10 +10,12 @@ enable_gyro: false
 enable_infra1: false
 enable_infra2: false
 enable_rgbd: false
-enable_sync: true  # Synchronize color and depth streams for alignment
+
+# Enable this for color + depth
+enable_sync: false  # Synchronize color and depth streams for alignment
 
 # Color camera settings
-rgb_camera.color_profile: 424x240x30  # Resolution and framerate
+rgb_camera.color_profile: 640x360x30  # Resolution and framerate
 rgb_camera.power_line_frequency: 2  # Reduce flickering in indoor lighting
 rgb_camera.enable_auto_exposure: true # See depth_module.enable_auto_exposure
 rgb_camera.color_format: 'RGB8' # This is needed for encoding
