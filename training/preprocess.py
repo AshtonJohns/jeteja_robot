@@ -157,11 +157,12 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
                     raise Exception(f"Depth image is not uint16. Found: {depth_image.dtype}")
                 # Normalize depth image to range [0, 1]
                 depth_image = image_processing.normalize_image(depth_image,depth=True)
-            else:
-                depth_image = None
 
                 if len(depth_image.shape) == 2:
                     depth_image = np.expand_dims(depth_image, axis=-1)  # Add channel dimension
+            else:
+                depth_image = None
+
 
             # Normalize PWM values to [0, 1]
             motor_pwm_normalized = (row['motor_pwm'] - MOTOR_MIN_DUTY_CYLE) / MOTOR_PWM_NORMALIZATION_FACTOR
@@ -233,10 +234,10 @@ def main():
     output_dir = os.path.join('data', 'processed_data', os.path.basename(latest_extracted_rosbag))
     os.makedirs(output_dir, exist_ok=True)
 
-    # Process commands.csv and update paths
-    process_commands(commands_path, output_dir, 
-                     color_dir=color_image_dir,
-                     depth_dir=depth_image_dir)
+    # # Process commands.csv and update paths
+    # process_commands(commands_path, output_dir, 
+    #                  color_dir=color_image_dir,
+    #                  depth_dir=depth_image_dir)
 
     updated_commands_path = os.path.join(output_dir, 'commands.csv')
 
