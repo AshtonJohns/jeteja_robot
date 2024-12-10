@@ -4,13 +4,13 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 import matplotlib.pyplot as plt
-import jeteja_launch.config.master_config as master_config
+import src.jeteja_launch.config.master_config as master_config
 from tensorflow.keras import mixed_precision, layers
 from tensorflow.keras.models import Model
 from tensorflow.keras.applications import EfficientNetB0
 from tensorflow.keras.layers import Input, Dense, Flatten, Concatenate, Multiply, Dropout, GlobalAveragePooling2D
-from file_utilities import get_latest_directory
-from training_utilities import write_run_trt_optimizer_script_color_depth, write_run_trt_optimizer_script_color, write_savedmodel_to_onnx_script
+from utils.file_utilities import get_latest_directory
+from utils.training_utilities import write_run_trt_optimizer_script_color_depth, write_run_trt_optimizer_script_color, write_savedmodel_to_onnx_script
 
 TRAIN_COLOR = master_config.TRAIN_COLOR
 COLOR_WIDTH = master_config.COLOR_WIDTH
