@@ -9,6 +9,8 @@ MODEL_PATH = master_config.MODEL_PATH
 COLOR_PREPROCESS_DATA_TYPE = master_config.COLOR_PREPROCESS_DATA_TYPE
 DEPTH_PREPROCESS_DATA_TYPE = master_config.DEPTH_PREPROCESS_DATA_TYPE
 PWM_OUTPUT_DATA_TYPE = master_config.PWM_OUTPUT_DATA_TYPE
+TRAIN_COLOR = master_config.TRAIN_COLOR
+TRAIN_DEPTH = master_config.TRAIN_DEPTH
 
 class TensorRTInference:
     def __init__(self):
@@ -29,18 +31,20 @@ class TensorRTInference:
         self._inspect_bindings()
 
         # Input and output bindings
-        self.color_input_idx = self.bindings.get('color_input')
-        self.depth_input_idx = self.bindings.get('depth_input')
+        self.color_input_idx = self.bindings.get('color_input', False)
+        self.depth_input_idx = self.bindings.get('depth_input', False)
         self.output_0_idx = self.bindings.get('output_0')
         self.output_1_idx = self.bindings.get('output_1')
 
         # Allocate memory on GPU
-        self.d_color_input = cuda.mem_alloc(
-            int(np.prod(self.binding_shapes['color_input']) * COLOR_PREPROCESS_DATA_TYPE(1).nbytes)
-        )
-        self.d_depth_input = cuda.mem_alloc(
-            int(np.prod(self.binding_shapes['depth_input']) * DEPTH_PREPROCESS_DATA_TYPE(1).nbytes)
-        )
+        if TRAIN_COLOR:
+            self.d_color_input = cuda.mem_alloc(
+                int(np.prod(self.binding_shapes['color_input']) * COLOR_PREPROCESS_DATA_TYPE(1).nbytes)
+            )
+        if TRAIN_DEPTH:
+            self.d_depth_input = cuda.mem_alloc(
+                int(np.prod(self.binding_shapes['depth_input']) * DEPTH_PREPROCESS_DATA_TYPE(1).nbytes)
+            )
         self.d_output_0 = cuda.mem_alloc(
             int(np.prod(self.binding_shapes['output_0']) * PWM_OUTPUT_DATA_TYPE(1).nbytes)
         )
