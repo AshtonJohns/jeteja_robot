@@ -5,11 +5,9 @@ import sys
 import os
 import json
 from time import time
-import serial
 import pygame
 import cv2 as cv
-from picamera2 import Picamera2
-from gpiozero import LED
+import pyrealsense2 as rs
 
 
 # SETUP
@@ -19,44 +17,29 @@ params_file = open(params_file_path)
 params = json.load(params_file)
 # Constants
 STEERING_AXIS = params['steering_joy_axis']
-STEERING_CENTER = params['steering_center']
-STEERING_RANGE = params['steering_range']
 THROTTLE_AXIS = params['throttle_joy_axis']
-THROTTLE_STALL = params['throttle_stall']
-THROTTLE_FWD_RANGE = params['throttle_fwd_range']
-THROTTLE_REV_RANGE = params['throttle_rev_range']
-THROTTLE_LIMIT = params['throttle_limit']
 RECORD_BUTTON = params['record_btn']
-STOP_BUTTON = params['stop_btn']
-# Init LED
-headlight = LED(params['led_pin'])
-headlight.off()
-# Init serial port
-ser_pico = serial.Serial(port='/dev/ttyACM0', baudrate=115200)
-print(f"Pico is connected to port: {ser_pico.name}")
+STOP_BUTTON = params['stop_btn_x']
 # Init controller
 pygame.display.init()
 pygame.joystick.init()
 js = pygame.joystick.Joystick(0)
 # Init camera
 cv.startWindowThread()
-cam = Picamera2()
-cam.configure(
-    cam.create_preview_configuration(
-        main={"format": 'RGB888', "size": (120, 160)},
-        controls={"FrameDurationLimits": (50000, 50000)},  # 20 FPS
-    )
-)
-cam.start()
-for i in reversed(range(60)):
-    frame = cam.capture_array()
-    # cv.imshow("Camera", frame)
-    # cv.waitKey(1)
-    if frame is None:
+cam = rs.pipeline() # type: ignore
+config = rs.config() # type: ignore
+config.enable_stream(rs.stream.depth, 320, 240, rs.format.z16, 25) # type: ignore
+config.enable_stream(rs.stream.color, 320, 240, rs.format.bgr8, 25) # type: ignore
+cam.start(config)
+for i in reversed(range(75)):
+    frames = cam.wait_for_frames()
+    if frames is None:
         print("No frame received. TERMINATE!")
         sys.exit()
-    if not i % 20:
-        print(i/20)  # count down 3, 2, 1 sec
+    # cv.imshow("Camera", frame)
+    # cv.waitKey(1)
+    if not i % 25:
+        print(i/25)  # count down 3, 2, 1 sec
 # Init timer for FPS computing
 start_stamp = time()
 frame_counts = 0
@@ -68,13 +51,11 @@ ax_val_th = 0.
 # MAIN LOOP
 try:
     while True:
-        frame = cam.capture_array() # read image
-        if frame is None:
+        frames = cam.wait_for_frames() # read image
+        if frames is None:
             print("No frame received. TERMINATE!")
-            headlight.close()
             cv.destroyAllWindows()
             pygame.quit()
-            ser_pico.close()
             sys.exit()
         cv.imshow('camera', frame)
         for e in pygame.event.get(): # read controller input
@@ -83,29 +64,15 @@ try:
                 ax_val_th = round((js.get_axis(THROTTLE_AXIS)), 2)  # keep 2 decimals
             elif e.type == pygame.JOYBUTTONDOWN:
                 if js.get_button(RECORD_BUTTON):
-                    headlight.toggle() 
+                    print("Record Pressed.")
                 elif js.get_button(STOP_BUTTON): # emergency stop
                     print("E-STOP PRESSED. TERMINATE!")
-                    headlight.off()
-                    headlight.close()
                     cv.destroyAllWindows()
                     pygame.quit()
-                    ser_pico.close()
                     sys.exit()
         # Calaculate steering and throttle value
         act_st = ax_val_st
         act_th = -ax_val_th # throttle action: -1: max forward, 1: max backward
-        # Encode steering value to dutycycle in nanosecond
-        duty_st = STEERING_CENTER - STEERING_RANGE + int(STEERING_RANGE * (act_st + 1))
-        # Encode throttle value to dutycycle in nanosecond
-        if act_th > 0:
-            duty_th = THROTTLE_STALL + int(THROTTLE_FWD_RANGE * min(act_th, THROTTLE_LIMIT))
-        elif act_th < 0:
-            duty_th = THROTTLE_STALL + int(THROTTLE_REV_RANGE * max(act_th, -THROTTLE_LIMIT))
-        else:
-            duty_th = THROTTLE_STALL 
-        msg = (str(duty_st) + "," + str(duty_th) + "\n").encode('utf-8')
-        ser_pico.write(msg)
         # Log action
         action = [act_st, act_th]
         print(f"action: {action}")
@@ -114,20 +81,23 @@ try:
         since_start = time() - start_stamp
         frame_rate = frame_counts / since_start
         print(f"frame rate: {frame_rate}")
+        # Display video
+        depth_frame = frames.get_depth_frame()
+        color_frame = frames.get_color_frame()
+        depth_image = np.asanyarray(depth_frame.get_data())
+        color_image = np.asanyarray(color_frame.get_data())
+        depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
+        image_stack = np.hstack((color_image, depth_colormap))
+        cv.imshow("RealSense", image_stack)
+        cv.waitKey(1)
         # Press "q" to quit
         if cv.waitKey(1)==ord('q'):
-            headlight.off()
-            headlight.close()
             cv.destroyAllWindows()
             pygame.quit()
-            ser_pico.close()
             sys.exit()
 
 # Take care terminal signal (Ctrl-c)
 except KeyboardInterrupt:
-    headlight.off()
-    headlight.close()
     cv.destroyAllWindows()
     pygame.quit()
-    ser_pico.close()
     sys.exit()
