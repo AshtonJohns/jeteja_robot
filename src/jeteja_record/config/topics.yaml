@@ -1,7 +1,7 @@
 topics:
   - /camera/camera/color/camera_info
   - /camera/camera/color/image_raw
-  - /camera/camera/depth/camera_info
-  - /camera/camera/depth/image_rect_raw
+  # - /camera/camera/depth/camera_info
+  # - /camera/camera/depth/image_rect_raw
   - /pwm_signals
-  - /scan
+  # - /scan
