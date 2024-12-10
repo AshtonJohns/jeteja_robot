@@ -2,7 +2,7 @@ camera_name: "realsense_d435i"
 
 # Enable streams
 enable_color: true
-enable_depth: true  # Enable depth stream
+enable_depth: false  # Enable depth stream
 enable_infra1: false
 enable_infra2: false
 enable_accel: false
@@ -15,7 +15,7 @@ enable_rgbd: false
 enable_sync: false  # Synchronize color and depth streams for alignment
 
 # Color camera settings
-rgb_camera.color_profile: 640x360x30  # Resolution and framerate
+rgb_camera.color_profile: 640x360x60  # Resolution and framerate
 rgb_camera.power_line_frequency: 2  # Reduce flickering in indoor lighting
 rgb_camera.enable_auto_exposure: true # See depth_module.enable_auto_exposure
 rgb_camera.color_format: 'brg8' # This is needed for encoding
