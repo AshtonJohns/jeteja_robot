@@ -26,7 +26,7 @@ COLOR_PREPROCESS_DATA_TYPE = master_config.COLOR_PREPROCESS_DATA_TYPE
 DEPTH_PREPROCESS_DATA_TYPE = master_config.DEPTH_PREPROCESS_DATA_TYPE
 
 # debug
-print(COLOR_NORMALIZATION_FACTOR)
+# print(COLOR_NORMALIZATION_FACTOR)
 
 def process_commands(commands_path, output_dir, **kwargs):
     """
@@ -38,34 +38,34 @@ def process_commands(commands_path, output_dir, **kwargs):
         -   color_dir: Directory containing color images
         -   depth_dir: Directory containing depth images
     """
+    # Load the CSV file into a DataFrame
+    commands_df = pd.read_csv(commands_path)
+
     if TRAIN_COLOR:
         color_dir = kwargs.get('color_dir', False)
+        color_image_files = get_files_from_directory(color_dir)  # List of color files
 
-        image_files = get_files_from_directory(color_dir) # list of color files
+        # Validate color image filenames
+        print("Validating color image filenames...")
+        commands_df['color_image_filename'] = find_image_vectorized(
+            commands_df['color_image_filename'], color_image_files
+        )
 
-        # Load the CSV file into a DataFrame
-        commands_df = pd.read_csv(commands_path)
-
-        # Process color image filenames
-        if color_dir and 'color_image_filename' in commands_df.columns:
-            print("Validating color image filenames...")
-            commands_df['color_image_filename'] = commands_df['color_image_filename'].apply(
-                lambda x: find_image(x, color_dir, image_files) if pd.notnull(x) else None
-            )
-    
     if TRAIN_DEPTH:
         depth_dir = kwargs.get('depth_dir', False)
-        image_files = get_files_from_directory(depth_dir) # list of depth files
+        depth_image_files = get_files_from_directory(depth_dir)  # List of depth files
 
-        # Process depth image filenames
-        if depth_dir and 'depth_image_filename' in commands_df.columns:
-            print("Validating depth image filenames...")
-            commands_df['depth_image_filename'] = commands_df['depth_image_filename'].apply(
-                lambda x: find_image(x, depth_dir, image_files) if pd.notnull(x) else None
-            )
+        # Validate depth image filenames
+        print("Validating depth image filenames...")
+        commands_df['depth_image_filename'] = find_image_vectorized(
+            commands_df['depth_image_filename'], depth_image_files
+        )
 
     # Remove rows where either color or depth image is missing
-    commands_df.dropna(subset=['color_image_filename', 'depth_image_filename'], inplace=True)
+    if TRAIN_COLOR and TRAIN_DEPTH:
+        commands_df.dropna(subset=['color_image_filename', 'depth_image_filename'], inplace=True)
+    elif TRAIN_COLOR:
+        commands_df.dropna(subset=['color_image_filename'], inplace=True)
 
     # Save the updated DataFrame back to a CSV
     processed_commands_path = os.path.join(output_dir, "commands.csv")
@@ -74,49 +74,42 @@ def process_commands(commands_path, output_dir, **kwargs):
     print(f"Commands file processed and saved to {processed_commands_path}.")
 
 
-def find_image(image_name, search_dir, image_list):
+def find_image_vectorized(image_filenames, image_files):
     """
-    Search for an image file in a directory, matching up to the second underscore,
-    without including the file extension in the pattern.
+    Vectorized function to find matching image files for a given list of filenames.
 
-    :param image_name: The original file name to find (from the CSV).
-    :param search_dir: The directory to search for the file.
-    :return: The first matched file name (with its actual extension), or None if no valid match is found.
+    :param image_filenames: pandas Series containing filenames to search for.
+    :param image_files: List of all image files in the directory.
+    :return: pandas Series with matched filenames or None if no match is found.
     """
-    if not search_dir or not image_name:
+    # Convert image files to a DataFrame for efficient lookup
+    image_files_df = pd.DataFrame({'image_files': image_files})
+
+    def match_image(image_name):
+        if pd.isnull(image_name):
+            return None
+        base_name, _ = os.path.splitext(image_name)
+        parts = base_name.split('_')
+
+        # Ensure the file name has at least two underscore-separated parts
+        if len(parts) < 3:
+            return None
+
+        # Extract the prefix (up to the second underscore) and nanoseconds
+        prefix = '_'.join(parts[:2])
+        nanoseconds = parts[2]
+
+        # Build a regex pattern to match the prefix and truncated nanoseconds
+        for i in range(1, len(nanoseconds) + 1):
+            pattern = f"{prefix}_{nanoseconds[:i]}.*"
+            matches = image_files_df['image_files'].str.match(pattern)
+            if matches.any():
+                return image_files_df.loc[matches.idxmax(), 'image_files']
+
         return None
 
-    base_name, _ = os.path.splitext(image_name)  # Ignore the extension
-    parts = base_name.split('_')
-
-    # Ensure the file name has at least two underscore-separated parts
-    if len(parts) < 3:
-        return None
-
-    # Extract the prefix (up to the second underscore)
-    prefix = '_'.join(parts[:2])
-    nanoseconds = parts[2]
-
-    # Start with the full nanoseconds and truncate step-by-step
-    last_match = None
-    for i in range(1, len(nanoseconds)):
-        pattern = f"{prefix}_{nanoseconds[:i]}.*"  # Match any extension
-        # print(f"Searching with pattern: {pattern}")  # Debug output
-        matches = [file for file in image_list if re.match(pattern,file)]
-        if matches:
-            last_match = matches[0]
-        else:
-            if last_match is not None:
-                # print(f"Match found: {last_match}")  # Debug output
-                return last_match
-
-    # If the final pattern ends with `_`, it's invalid
-    if len(nanoseconds) == 0 or f"{prefix}_" in pattern:
-        print(f"No valid match for {image_name}. Removing row.")
-        return None
-
-    # return None  # No match found
-    raise Exception("Didn't find an image")
+    # Apply the matching function vectorized over the Series
+    return image_filenames.apply(match_image)
 
 
 def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
@@ -141,7 +134,7 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
                     continue
                 # Validate image types
                 if color_image.dtype != COLOR_DATA_TYPE:
-                    raise Exception(f"Color image is not uint8. Found: {color_image.dtype}")
+                    raise Exception(f"Color image is not {COLOR_DATA_TYPE}. Found: {color_image.dtype}")
                 # Normalize color image to [0, 1]
                 color_image = image_processing.normalize_image(color_image,color=True)
             else:
@@ -154,7 +147,7 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
                     print(f"Skipping row due to missing images: {row}")
                     continue
                 if depth_image.dtype != DEPTH_DATA_TYPE:
-                    raise Exception(f"Depth image is not uint16. Found: {depth_image.dtype}")
+                    raise Exception(f"Depth image is not {DEPTH_DATA_TYPE}. Found: {depth_image.dtype}")
                 # Normalize depth image to range [0, 1]
                 depth_image = image_processing.normalize_image(depth_image,depth=True)
 
@@ -169,9 +162,9 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
             steering_pwm_normalized = (row['steering_pwm'] - STEERING_MIN_DUTY_CYCLE) / STEERING_PWM_NORMALIZATION_FACTOR
 
             # Debugging
-            # print(f"Color image range: {color_image.min()} to {color_image.max()}")
+            print(f"Color image range: {color_image.min()} to {color_image.max()}")
             # print(f"Depth image range: {depth_image.min()} to {depth_image.max()}")
-            # print(f"Color image shape before serialization: {color_image.shape}, dtype: {color_image.dtype}")
+            print(f"Color image shape before serialization: {color_image.shape}, dtype: {color_image.dtype}")
             # print(f"Depth image shape before serialization: {depth_image.shape}, dtype: {depth_image.dtype}")
             # print(f"Normalized motor pwm: {motor_pwm_normalized}")
             # print(f"Normalized steering pwm: {steering_pwm_normalized}")
@@ -234,7 +227,7 @@ def main():
     output_dir = os.path.join('data', 'processed_data', os.path.basename(latest_extracted_rosbag))
     os.makedirs(output_dir, exist_ok=True)
 
-    # # Process commands.csv and update paths
+    # Process commands.csv and update paths
     # process_commands(commands_path, output_dir, 
     #                  color_dir=color_image_dir,
     #                  depth_dir=depth_image_dir)

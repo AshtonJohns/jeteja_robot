@@ -76,6 +76,7 @@ def get_feature_description():
         }
     return feature_description
 
+
 def get_decoded_reshaped_image(parsed_features, image_height, image_width, image_channels):
     # Decode images from serialized bytes
     decoded_image = tf.io.decode_raw(parsed_features['color_image'], PWM_PREPROCESS_DATA_TYPE)
@@ -127,6 +128,7 @@ def prepare_dataset(tfrecord_path, batch_size, shuffle=True):
 
     return parsed_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
+
 def se_block(input_tensor, reduction_ratio=16):
     channels = input_tensor.shape[-1]  # Number of channels in the input tensor
 
@@ -159,7 +161,6 @@ def spatial_attention(input_tensor):
     return layers.Multiply()([input_tensor, attention])
 
 
-
 def cbam_attention(color_features, depth_features):
     combined_features = Concatenate()([color_features, depth_features])
     # Apply SE block for channel-wise attention
@@ -167,6 +168,7 @@ def cbam_attention(color_features, depth_features):
     # Apply spatial attention
     combined_features = spatial_attention(combined_features)
     return combined_features
+
 
 def dynamic_weights(color_features, depth_features):
     combined_features = Concatenate()([color_features, depth_features])
@@ -327,9 +329,6 @@ def create_model(
         return model
 
 
-
-
-
 if __name__ == '__main__':
     # Training setup
     batch_size = 24 # TODO
@@ -337,6 +336,17 @@ if __name__ == '__main__':
 
     train_dataset = prepare_dataset(train_tfrecord, batch_size=batch_size, shuffle=True)
     val_dataset = prepare_dataset(val_tfrecord, batch_size=batch_size, shuffle=False)
+
+    # Debug
+    for data, labels in train_dataset.take(1):
+        print("Data keys:", data.keys())  # Expect: dict_keys(['color_input'])
+        print("Color input shape:", data['color_input'].shape)  # Expect: (batch_size, 360, 640, 3)
+    for batch_data, batch_labels in train_dataset.take(1):
+        print("Batch data:", batch_data)  # Should print: {'color_input': <Tensor>}
+        print("Batch labels:", batch_labels)  # Should print: {'motor_pwm': <Tensor>, 'steering_pwm': <Tensor>}
+    for data, labels in train_dataset.take(1):
+        print("Final Batch Data Keys:", data.keys())  # Expect: dict_keys(['color_input'])
+        print("Final Color Input Shape:", data['color_input'].shape)  # Expect: (24, 360, 640, 3)
 
     model = create_model(
         use_efficientnet=False,      # Start with the custom Conv2D backbone for simplicity
@@ -346,6 +356,14 @@ if __name__ == '__main__':
         use_combined_attention=False,# Skip combined attention for now
         use_dynamic_weights=False     # Enable dynamic weighting for color and depth features
     )
+
+    # Debug
+    for data, labels in train_dataset.take(1):
+        output = model.predict(data)  # Test single batch
+        print("Prediction shape:", output)
+
+    print(model.inputs)
+
     model.summary()
 
     # Callbacks
