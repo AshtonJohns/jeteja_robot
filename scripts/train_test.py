@@ -113,12 +113,13 @@ model = convnets.DonkeyNet().to(DEVICE)  # Adjust input channels to 3 (RGB only)
 lr = 0.002
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 loss_fn = standard_loss
-epochs = 32
-patience = 7
-best_loss = float('inf')  # best loss on test data
+epochs = 15
+patience = 5
+best_loss = float('inf')  # Best loss on test data
 best_counter = 0
 train_losses = []
 test_losses = []
+
 for t in range(epochs):
     print(f"Epoch {t + 1}\n-------------------------------")
     ep_train_loss = train(train_dataloader, model, loss_fn, optimizer)
@@ -131,13 +132,15 @@ for t in range(epochs):
         best_loss = ep_test_loss
         best_counter = 0  # Reset counter if validation loss improved
         try:
-            os.remove(os.path.join(data_dir, f'{model_name}.pth'))
-            print(f"Last best model file has been deleted successfully.")
+            if 'model_name' in locals():
+                os.remove(os.path.join(data_dir, f'{model_name}.pth'))
+                print(f"Last best model file has been deleted successfully.")
         except FileNotFoundError:
             print(f"File '{os.path.join(data_dir, f'{model_name}.pth')}' not found.")
         except Exception as e:
             print(f"Error occurred while deleting the file: {e}")
-        model_name = f'{model._get_name()}-{ep+1}ep-{learning_rate}lr-{ep_test_loss:.4f}mse'
+
+        model_name = f'{model._get_name()}-{t+1}ep-{lr}lr-{ep_test_loss:.4f}mse'
         torch.save(model.state_dict(), os.path.join(data_dir, f'{model_name}.pth'))
         print(f"Best model saved as '{os.path.join(data_dir, f'{model_name}.pth')}'")
     else:
