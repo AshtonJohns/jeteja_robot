@@ -2,10 +2,17 @@ import yaml
 import os
 import numpy as np
 import tensorflow as tf
+import scripts.lower_control as lower_control
 from ament_index_python.packages import get_package_share_directory
 
 
 ################# CONFIG files #################
+teleop_config = os.path.join(
+    get_package_share_directory('jeteja_launch'),
+    'config',
+    'teleop_twist_joy.yaml'
+)
+
 realsense2_camera_config = os.path.join(
     get_package_share_directory('jeteja_launch'),
     'config',
@@ -44,8 +51,19 @@ STEERING_NEUTRAL_DUTY_CYCLE = lower_control_config["steering_neutral_duty_cycle"
 STEERING_MAX_DUTY_CYCLE = lower_control_config["steering_max_duty_cycle"]
 STEERING_MIN_DUTY_CYCLE = lower_control_config["steering_min_duty_cycle"]
 
-MOTOR_PWM_NORMALIZATION_FACTOR = MOTOR_MAX_DUTY_CYCLE - MOTOR_MIN_DUTY_CYCLE
-STEERING_PWM_NORMALIZATION_FACTOR = STEERING_MAX_DUTY_CYCLE - STEERING_MIN_DUTY_CYCLE
+with open(teleop_config, 'r') as file:
+    teleop_config = yaml.safe_load(file)
+
+# Normalization
+SCALE_LINEAR = teleop_config['scale_linear.x']
+ADJUSTED_PWMS = lower_control.calculate_adjusted_pwm_range(SCALE_LINEAR)
+ADJUSTED_MOTOR_MAX_DUTY_CYCLE = ADJUSTED_PWMS['motor_max_pwm']
+ADJUSTED_MOTOR_MIN_DUTY_CYCLE = ADJUSTED_PWMS['motor_min_pwm']
+ADJUSTED_STEERING_MAX_DUTY_CYCLE = ADJUSTED_PWMS['steering_max_pwm']
+ADJUSTED_STEERING_MIN_DUTY_CYCLE = ADJUSTED_PWMS['steering_min_pwm']
+
+MOTOR_PWM_NORMALIZATION_FACTOR = ADJUSTED_MOTOR_MAX_DUTY_CYCLE - ADJUSTED_MOTOR_MIN_DUTY_CYCLE
+STEERING_PWM_NORMALIZATION_FACTOR = ADJUSTED_STEERING_MAX_DUTY_CYCLE - ADJUSTED_STEERING_MIN_DUTY_CYCLE
 
 
 ################# CONTROLLER CONFIG #################
