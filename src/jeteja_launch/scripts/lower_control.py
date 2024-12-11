@@ -6,6 +6,7 @@ MOTOR_MIN_DUTY_CYCLE = master_config.MOTOR_MIN_DUTY_CYCLE
 STEERING_NEUTRAL_DUTY_CYCLE = master_config.STEERING_NEUTRAL_DUTY_CYCLE
 STEERING_MAX_DUTY_CYCLE = master_config.STEERING_MAX_DUTY_CYCLE
 STEERING_MIN_DUTY_CYCLE = master_config.STEERING_MIN_DUTY_CYCLE
+PWM_DATA_TYPE = master_config.PWM_DATA_TYPE
 
 def calculate_motor_duty_cycle(value):
     """cmd velocity to pwm motor duty"""
@@ -66,10 +67,10 @@ def calculate_adjusted_pwm_range(scale_linear):
     steering_min_pwm = STEERING_NEUTRAL_DUTY_CYCLE - (scale_linear * (STEERING_NEUTRAL_DUTY_CYCLE - STEERING_MIN_DUTY_CYCLE))
 
     return {
-        "motor_max_pwm": motor_max_pwm,
-        "motor_min_pwm": motor_min_pwm,
-        "steering_max_pwm": steering_max_pwm,
-        "steering_min_pwm": steering_min_pwm
+        "motor_max_pwm": PWM_DATA_TYPE(motor_max_pwm),
+        "motor_min_pwm": PWM_DATA_TYPE(motor_min_pwm),
+        "steering_max_pwm": PWM_DATA_TYPE(steering_max_pwm),
+        "steering_min_pwm": PWM_DATA_TYPE(steering_min_pwm)
     }
 
 SCALE_LINEAR = master_config.SCALE_LINEAR
