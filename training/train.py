@@ -181,155 +181,180 @@ def dynamic_weights(color_features, depth_features):
     color_weight, depth_weight = layers.Lambda(split_gate)(gate)
     return layers.Multiply()([color_features, color_weight]), layers.Multiply()([depth_features, depth_weight])
 
+# def build_conv2d_backbone(input_tensor, neurons, use_flatten, use_se_block, use_spatial_attention):
+#     # Custom Conv2D backbone
+#     x = layers.Conv2D(64, (3, 3), activation='relu')(input_tensor)
+#     x = layers.MaxPooling2D((2, 2))(x)
+#     x = layers.Conv2D(128, (3, 3), activation='relu')(x)
+#     x = layers.MaxPooling2D((2, 2))(x)
+
+#     # Optional attention mechanisms
+#     if use_se_block:
+#         x = se_block(x)
+#     if use_spatial_attention:
+#         x = spatial_attention(x)
+
+#     # Reduce spatial dimensions
+#     x = Flatten()(x) if use_flatten else GlobalAveragePooling2D()(x)
+
+#     # Add dense layers
+#     x = Dense(neurons, activation='relu')(x)
+#     x = Dropout(0.3)(x)
+#     return x
+
+def build_conv2d_backbone(input_tensor, neurons, use_flatten, use_se_block, use_spatial_attention):
+    # First convolutional block
+    x = layers.Conv2D(64, (5, 5), strides=(2, 2), activation='relu')(input_tensor)
+    x = layers.BatchNormalization()(x)
+    x = layers.MaxPooling2D((2, 2))(x)
+
+    # Second convolutional block
+    x = layers.Conv2D(128, (3, 3), activation='relu')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.MaxPooling2D((2, 2))(x)
+
+    # Optional attention mechanisms
+    if use_se_block:
+        x = se_block(x)
+    if use_spatial_attention:
+        x = spatial_attention(x)
+
+    # Reduce spatial dimensions
+    x = Flatten()(x) if use_flatten else GlobalAveragePooling2D()(x)
+
+    # Dense layers for feature representation
+    x = Dense(neurons, activation='relu')(x)
+    x = Dropout(0.3)(x)
+    return x
+
+
+def build_efficientnet_backbone(input_tensor, input_shape, neurons, use_se_block, use_spatial_attention):
+    # EfficientNet backbone
+    efficientnet = EfficientNetB0(include_top=False, weights='imagenet', input_shape=input_shape)
+    x = efficientnet(input_tensor)
+
+    # Optional attention mechanisms
+    if use_se_block:
+        x = se_block(x)
+    if use_spatial_attention:
+        x = spatial_attention(x)
+
+    # Reduce spatial dimensions
+    x = GlobalAveragePooling2D()(x)
+    x = Dense(neurons, activation='relu')(x)
+    x = Dropout(0.3)(x)
+    return x
+
 # Create the model
-def create_model(
-    use_efficientnet=False, 
-    use_flatten=False, 
-    neurons=None,
-    use_se_block=False, 
-    use_spatial_attention=False,
-    use_combined_attention=False,
-    use_dynamic_weights=False,
-):
-    # Default neurons if not provided
-    if neurons is None:
-        neurons = {
+def create_model(config):
+    """
+    Model Factory to build a customizable model based on the configuration.
+    """
+    inputs = []
+    features = []
+
+    # Build color input and backbone
+    if config['TRAIN_COLOR']:
+        color_input = Input(shape=(config['COLOR_HEIGHT'], config['COLOR_WIDTH'], config['COLOR_CHANNELS']), name='color_input')
+        inputs.append(color_input)
+        
+        if config['use_efficientnet']:
+            color_features = build_efficientnet_backbone(
+                color_input, 
+                input_shape=(config['COLOR_HEIGHT'], config['COLOR_WIDTH'], config['COLOR_CHANNELS']),
+                neurons=config['neurons']['color_dense'],
+                use_se_block=config['use_se_block'],
+                use_spatial_attention=config['use_spatial_attention']
+            )
+        else:
+            color_features = build_conv2d_backbone(
+                color_input,
+                neurons=config['neurons']['color_dense'],
+                use_flatten=config['use_flatten'],
+                use_se_block=config['use_se_block'],
+                use_spatial_attention=config['use_spatial_attention']
+            )
+        features.append(color_features)
+
+    # Build depth input and backbone
+    if config['TRAIN_DEPTH']:
+        depth_input = Input(shape=(config['DEPTH_HEIGHT'], config['DEPTH_WIDTH'], config['DEPTH_CHANNELS']), name='depth_input')
+        inputs.append(depth_input)
+        
+        if config['use_efficientnet']:
+            depth_features = build_efficientnet_backbone(
+                depth_input,
+                input_shape=(config['DEPTH_HEIGHT'], config['DEPTH_WIDTH'], config['DEPTH_CHANNELS']),
+                neurons=config['neurons']['depth_dense'],
+                use_se_block=config['use_se_block'],
+                use_spatial_attention=config['use_spatial_attention']
+            )
+        else:
+            depth_features = build_conv2d_backbone(
+                depth_input,
+                neurons=config['neurons']['depth_dense'],
+                use_flatten=config['use_flatten'],
+                use_se_block=config['use_se_block'],
+                use_spatial_attention=config['use_spatial_attention']
+            )
+        features.append(depth_features)
+
+    # Combine features if both color and depth are used
+    if len(features) > 1:
+        if config['use_combined_attention']:
+            combined_features = cbam_attention(features[0], features[1])
+        elif config['use_dynamic_weights']:
+            combined_features = Concatenate()(dynamic_weights(features[0], features[1]))
+        else:
+            combined_features = Concatenate()(features)
+    else:
+        combined_features = features[0]
+
+    # Fully connected layers
+    x = Dense(config['neurons']['combined_dense1'], activation='relu')(combined_features)
+    x = Dropout(0.4)(x)
+    x = Dense(config['neurons']['combined_dense2'], activation='relu')(x)
+    x = Dropout(0.3)(x)
+    x = Dense(config['neurons']['combined_dense3'], activation='relu')(x)
+
+    # Output layers
+    motor_pwm = Dense(1, name='motor_pwm')(x)
+    steering_pwm = Dense(1, name='steering_pwm')(x)
+
+    # Compile the model
+    model = Model(inputs=inputs, outputs=[motor_pwm, steering_pwm])
+    optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'])
+    model.compile(optimizer=optimizer, loss={'motor_pwm': 'mse', 'steering_pwm': 'mse'})
+    return model
+
+
+def main():
+    config = {
+        'TRAIN_COLOR': TRAIN_COLOR,
+        'COLOR_HEIGHT': COLOR_HEIGHT,
+        'COLOR_WIDTH': COLOR_WIDTH,
+        'COLOR_CHANNELS': COLOR_CHANNELS,
+        'TRAIN_DEPTH': TRAIN_DEPTH,
+        'DEPTH_HEIGHT': DEPTH_HEIGHT,
+        'DEPTH_WIDTH': DEPTH_WIDTH,
+        'DEPTH_CHANNELS': DEPTH_CHANNELS,
+        'use_efficientnet': False,
+        'use_flatten': False,
+        'use_se_block': False,
+        'use_spatial_attention': False,
+        'use_combined_attention': False,
+        'use_dynamic_weights': False,
+        'neurons': {
             'color_dense': 128,
             'depth_dense': 64,
             'combined_dense1': 256,
             'combined_dense2': 128,
             'combined_dense3': 64,
-        }
-
-    if TRAIN_COLOR and TRAIN_DEPTH:
-        # Color input and features
-        color_input = Input(shape=(COLOR_HEIGHT, COLOR_WIDTH, COLOR_CHANNELS), name='color_input')
-        
-        if use_efficientnet:
-            # EfficientNet backbone
-            efficientnet_color = EfficientNetB0(include_top=False, weights='imagenet', input_shape=(COLOR_HEIGHT, COLOR_WIDTH, COLOR_CHANNELS), name="efficientnetb0_color")
-            color_features = efficientnet_color(color_input)
-        else:
-            # Custom Conv2D backbone
-            color_features = layers.Conv2D(64, (3, 3), activation='relu')(color_input)
-            color_features = layers.MaxPooling2D((2, 2))(color_features)
-            color_features = layers.Conv2D(128, (3, 3), activation='relu')(color_features)
-            color_features = layers.MaxPooling2D((2, 2))(color_features)
-
-        # Apply SE block or spatial attention BEFORE reducing spatial dimensions
-        if use_se_block:
-            color_features = se_block(color_features)  # Apply SE block to the 4D tensor
-        if use_spatial_attention:
-            color_features = spatial_attention(color_features)  # Apply Spatial Attention
-
-        # Reduce spatial dimensions after attention mechanisms
-        color_features = Flatten()(color_features) if use_flatten else GlobalAveragePooling2D()(color_features)
-        color_features = Dense(neurons['color_dense'], activation='relu')(color_features)
-        color_features = Dropout(0.3)(color_features)
-
-        # Depth input and features
-        depth_input = Input(shape=(DEPTH_HEIGHT, DEPTH_WIDTH, DEPTH_CHANNELS), name='depth_input')
-
-        if use_efficientnet:
-            # EfficientNet backbone
-            efficientnet_depth = EfficientNetB0(include_top=False, weights=None, input_shape=(DEPTH_HEIGHT, DEPTH_WIDTH, DEPTH_CHANNELS), name="efficientnetb0_depth")
-            depth_features = efficientnet_depth(depth_input)
-        else:
-            # Custom Conv2D backbone
-            depth_features = layers.Conv2D(64, (3, 3), activation='relu')(depth_input)
-            depth_features = layers.MaxPooling2D((2, 2))(depth_features)
-            depth_features = layers.Conv2D(128, (3, 3), activation='relu')(depth_features)
-            depth_features = layers.MaxPooling2D((2, 2))(depth_features)
-
-        # Apply SE block or spatial attention BEFORE reducing spatial dimensions
-        if use_se_block:
-            depth_features = se_block(depth_features)  # Apply SE block to the 4D tensor
-        if use_spatial_attention:
-            depth_features = spatial_attention(depth_features)  # Apply Spatial Attention
-
-        # Reduce spatial dimensions after attention mechanisms
-        depth_features = Flatten()(depth_features) if use_flatten else GlobalAveragePooling2D()(depth_features)
-        depth_features = Dense(neurons['depth_dense'], activation='relu')(depth_features)
-        depth_features = Dropout(0.3)(depth_features)
-
-        # Combine color and depth features
-        if use_combined_attention:
-            # Use combined attention mechanism
-            combined_features = cbam_attention(color_features, depth_features)
-        elif use_dynamic_weights:
-            # Use dynamic weighting
-            weighted_color, weighted_depth = dynamic_weights(color_features, depth_features)
-            combined_features = Concatenate()([weighted_color, weighted_depth])
-        else:
-            # Default weighted combination
-            color_weight = Dense(1, activation='sigmoid', name='color_weight')(color_features)
-            depth_weight = Dense(1, activation='sigmoid', name='depth_weight')(depth_features)
-            weighted_color = Multiply()([color_features, color_weight])
-            weighted_depth = Multiply()([depth_features, depth_weight])
-            combined_features = Concatenate()([weighted_color, weighted_depth])
-
-        # Fully connected layers
-        x = Dense(neurons['combined_dense1'], activation='relu')(combined_features)
-        x = Dropout(0.4)(x)
-        x = Dense(neurons['combined_dense2'], activation='relu')(x)
-        x = Dropout(0.3)(x)
-        x = Dense(neurons['combined_dense3'], activation='relu')(x)
-        
-        # Outputs
-        linear_output = Dense(1, name='motor_pwm')(x)
-        angular_output = Dense(1, name='steering_pwm')(x)
-
-        # Compile model
-        model = Model(inputs=[color_input, depth_input], outputs=[linear_output, angular_output])
-        optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
-        model.compile(optimizer=optimizer, loss={'motor_pwm': 'mse', 'steering_pwm': 'mse'})
-        return model
-
-    elif TRAIN_COLOR:
-        # Color input and features
-        color_input = Input(shape=(COLOR_HEIGHT, COLOR_WIDTH, COLOR_CHANNELS), name='color_input')
-
-        if use_efficientnet:
-            # EfficientNet backbone
-            efficientnet_color = EfficientNetB0(include_top=False, weights='imagenet', input_shape=(COLOR_HEIGHT, COLOR_WIDTH, COLOR_CHANNELS), name="efficientnetb0_color")
-            color_features = efficientnet_color(color_input)
-        else:
-            # Custom Conv2D backbone
-            color_features = layers.Conv2D(64, (3, 3), activation='relu')(color_input)
-            color_features = layers.MaxPooling2D((2, 2))(color_features)
-            color_features = layers.Conv2D(128, (3, 3), activation='relu')(color_features)
-            color_features = layers.MaxPooling2D((2, 2))(color_features)
-
-        # Apply SE block or spatial attention BEFORE reducing spatial dimensions
-        if use_se_block:
-            color_features = se_block(color_features)  # Apply SE block to the 4D tensor
-        if use_spatial_attention:
-            color_features = spatial_attention(color_features)  # Apply Spatial Attention
-
-        # Reduce spatial dimensions after attention mechanisms
-        color_features = Flatten()(color_features) if use_flatten else GlobalAveragePooling2D()(color_features)
-        color_features = Dense(neurons['color_dense'], activation='relu')(color_features)
-        color_features = Dropout(0.3)(color_features)
-
-        # Fully connected layers
-        x = Dense(neurons['combined_dense1'], activation='relu')(color_features)
-        x = Dropout(0.4)(x)
-        x = Dense(neurons['combined_dense2'], activation='relu')(x)
-        x = Dropout(0.3)(x)
-        x = Dense(neurons['combined_dense3'], activation='relu')(x)
-
-        # Outputs
-        linear_output = Dense(1, name='motor_pwm')(x)
-        angular_output = Dense(1, name='steering_pwm')(x)
-
-        # Compile model
-        model = Model(inputs=color_input, outputs=[linear_output, angular_output])
-        optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
-        model.compile(optimizer=optimizer, loss={'motor_pwm': 'mse', 'steering_pwm': 'mse'})
-        return model
+        },
+        'learning_rate': 0.001,
+    }
 
 
-if __name__ == '__main__':
     # Training setup
     batch_size = 24 # TODO
     epochs = 100 # TODO
@@ -348,14 +373,7 @@ if __name__ == '__main__':
         print("Final Batch Data Keys:", data.keys())  # Expect: dict_keys(['color_input'])
         print("Final Color Input Shape:", data['color_input'].shape)  # Expect: (24, 360, 640, 3)
 
-    model = create_model(
-        use_efficientnet=False,      # Start with the custom Conv2D backbone for simplicity
-        use_flatten=False,           # Use GlobalAveragePooling2D to reduce feature dimensions
-        use_se_block=False,           # Enable SE blocks for channel-wise attention
-        use_spatial_attention=False,  # Skip spatial attention initially
-        use_combined_attention=False,# Skip combined attention for now
-        use_dynamic_weights=False     # Enable dynamic weighting for color and depth features
-    )
+    model = create_model(config)
 
     # Debug
     for data, labels in train_dataset.take(1):
@@ -420,6 +438,10 @@ if __name__ == '__main__':
     plt.ylabel('Loss')
     plt.title('Training vs Validation Loss')
     plt.savefig(os.path.join(MODEL_DIR, "training_vs_validation.png"))
+
+
+if __name__ == '__main__':
+    main()
 
 
 
