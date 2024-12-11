@@ -113,8 +113,8 @@ model = convnets.DonkeyNet().to(DEVICE)  # Adjust input channels to 3 (RGB only)
 lr = 0.002
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 loss_fn = standard_loss
-epochs = 32
-patience = 7
+epochs = 15
+patience = 5
 best_loss = float('inf')  # Best loss on test data
 best_counter = 0
 train_losses = []
