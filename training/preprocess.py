@@ -230,7 +230,6 @@ def main():
                      color_dir=color_image_dir,
                      depth_dir=depth_image_dir)
     
-    exit()
 
     updated_commands_path = os.path.join(output_dir, 'commands.csv')
 
