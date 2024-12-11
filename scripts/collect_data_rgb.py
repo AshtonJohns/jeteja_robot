@@ -87,10 +87,10 @@ try:
         frames = pipeline.wait_for_frames()
         color_frame = frames.get_color_frame()
         # Log frame rate
-        frame_counts += 1
+        #frame_counts += 1
         since_start = time() - start_stamp
-        frame_rate = frame_counts / since_start
-        print(f"frame rate: {frame_rate:.2f} FPS")  # debug
+        #frame_rate = frame_counts / since_start
+        #print(f"frame rate: {frame_rate:.2f} FPS")  # debug
 
         # Convert color frame to numpy array and resize to 120x160
         color_image = np.asanyarray(color_frame.get_data())
@@ -138,7 +138,7 @@ try:
         # Save data if recording is active
         if is_recording:
             # Save the RGB image
-            cv2.imwrite(os.path.join(rgb_image_dir, f"{frame_counts}_rgb.png"), resized_color_image)
+            cv2.imwrite(os.path.join(image_dir, f"{frame_counts}_rgb.png"), resized_color_image)
 
             # Log joystick values with image name
             with open(label_path, 'a+', newline='') as f:
