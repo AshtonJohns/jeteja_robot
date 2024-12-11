@@ -156,10 +156,8 @@ def process_images_to_tfrecord(color_dir, depth_dir, commands_df, output_path):
             else:
                 depth_image = None
 
-
             # Normalize PWM values to [0, 1]
-            motor_pwm_normalized = (row['motor_pwm'] - MOTOR_MIN_DUTY_CYLE) / MOTOR_PWM_NORMALIZATION_FACTOR
-            steering_pwm_normalized = (row['steering_pwm'] - STEERING_MIN_DUTY_CYCLE) / STEERING_PWM_NORMALIZATION_FACTOR
+            motor_pwm_normalized, steering_pwm_normalized = image_processing.normalize_pwm(row['motor_pwm'], row['steering_pwm'])
 
             # Debugging
             print(f"Color image range: {color_image.min()} to {color_image.max()}")
