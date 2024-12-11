@@ -64,7 +64,7 @@ with open(teleop_config, 'r') as file:
 
 # Normalization
 SCALE_LINEAR = teleop_config['teleop_twist_joy_node']['ros__parameters']['scale_linear']['x']
-
+SCALE_ANGULAR = teleop_config['teleop_twist_joy_node']['ros__parameters']['scale_angular']['yaw']
 
 ################# CONTROLLER CONFIG #################
 with open(joy_controller_config, 'r') as file:
