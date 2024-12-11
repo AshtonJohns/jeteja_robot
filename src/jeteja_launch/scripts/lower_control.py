@@ -55,3 +55,25 @@ def create_neutral_command_message():
 
 def get_neutral_pwm():
     return master_config.MOTOR_NEUTRAL_DUTY_CYCLE, master_config.STEERING_NEUTRAL_DUTY_CYCLE
+
+def calculate_adjusted_pwm_range(scale_linear):
+    # Motor PWM range
+    motor_max_pwm = MOTOR_NEUTRAL_DUTY_CYCLE + (scale_linear * (MOTOR_MAX_DUTY_CYCLE - MOTOR_NEUTRAL_DUTY_CYCLE))
+    motor_min_pwm = MOTOR_NEUTRAL_DUTY_CYCLE - (scale_linear * (MOTOR_NEUTRAL_DUTY_CYCLE - MOTOR_MIN_DUTY_CYCLE))
+
+    # Steering PWM range
+    steering_max_pwm = STEERING_NEUTRAL_DUTY_CYCLE + (scale_linear * (STEERING_MAX_DUTY_CYCLE - STEERING_NEUTRAL_DUTY_CYCLE))
+    steering_min_pwm = STEERING_NEUTRAL_DUTY_CYCLE - (scale_linear * (STEERING_NEUTRAL_DUTY_CYCLE - STEERING_MIN_DUTY_CYCLE))
+
+    return {
+        "motor_max_pwm": motor_max_pwm,
+        "motor_min_pwm": motor_min_pwm,
+        "steering_max_pwm": steering_max_pwm,
+        "steering_min_pwm": steering_min_pwm
+    }
+
+def main():
+    print(calculate_adjusted_pwm_range(0.17))
+
+if __name__ == '__main__':
+    main()
