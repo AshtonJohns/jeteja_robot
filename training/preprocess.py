@@ -47,7 +47,7 @@ def process_commands(commands_path, output_dir, **kwargs):
 
         # Validate color image filenames
         print("Validating color image filenames...")
-        commands_df['color_image_filename'] = find_image_vectorized(
+        commands_df['color_image_filename'] = find_image(
             commands_df['color_image_filename'], color_image_files
         )
 
@@ -57,7 +57,7 @@ def process_commands(commands_path, output_dir, **kwargs):
 
         # Validate depth image filenames
         print("Validating depth image filenames...")
-        commands_df['depth_image_filename'] = find_image_vectorized(
+        commands_df['depth_image_filename'] = find_image(
             commands_df['depth_image_filename'], depth_image_files
         )
 
@@ -74,7 +74,7 @@ def process_commands(commands_path, output_dir, **kwargs):
     print(f"Commands file processed and saved to {processed_commands_path}.")
 
 
-def find_image_vectorized(image_filenames, image_files):
+def find_image(image_filenames, image_files):
     """
     Vectorized function to find matching image files for a given list of filenames.
 
@@ -228,9 +228,11 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
 
     # Process commands.csv and update paths
-    # process_commands(commands_path, output_dir, 
-    #                  color_dir=color_image_dir,
-    #                  depth_dir=depth_image_dir)
+    process_commands(commands_path, output_dir, 
+                     color_dir=color_image_dir,
+                     depth_dir=depth_image_dir)
+    
+    exit()
 
     updated_commands_path = os.path.join(output_dir, 'commands.csv')
 
