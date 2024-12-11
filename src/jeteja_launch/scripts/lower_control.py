@@ -26,19 +26,19 @@ def calculate_steering_duty_cycle(value):
         return STEERING_NEUTRAL_DUTY_CYCLE
     
 def perform_safe_speed_check(speed, steering):
-    if speed > MOTOR_MAX_DUTY_CYCLE:
+    if speed > ADJUSTED_MOTOR_MAX_DUTY_CYCLE:
         print(f"Exceeded motor_pwm: {speed}")
-        speed = MOTOR_MAX_DUTY_CYCLE
-    elif speed < MOTOR_MIN_DUTY_CYCLE:
+        speed = ADJUSTED_MOTOR_MAX_DUTY_CYCLE
+    elif speed < ADJUSTED_MOTOR_MIN_DUTY_CYCLE:
         print(f"Low motor_pwm: {speed}")
-        speed = MOTOR_MIN_DUTY_CYCLE
+        speed = ADJUSTED_MOTOR_MIN_DUTY_CYCLE
         
-    if steering > STEERING_MAX_DUTY_CYCLE:
+    if steering > ADJUSTED_STEERING_MAX_DUTY_CYCLE:
         print(f"Exceeded steering_pwm: {speed}")
-        steering = STEERING_MAX_DUTY_CYCLE
-    elif steering < STEERING_MIN_DUTY_CYCLE:
+        steering = ADJUSTED_STEERING_MAX_DUTY_CYCLE
+    elif steering < ADJUSTED_STEERING_MIN_DUTY_CYCLE:
         print(f"Low steering_pwm: {speed}")
-        steering = STEERING_MIN_DUTY_CYCLE
+        steering = ADJUSTED_STEERING_MIN_DUTY_CYCLE
     
     return speed, steering
 
@@ -72,8 +72,25 @@ def calculate_adjusted_pwm_range(scale_linear):
         "steering_min_pwm": steering_min_pwm
     }
 
+SCALE_LINEAR = master_config.SCALE_LINEAR
+ADJUSTED_PWMS = calculate_adjusted_pwm_range(SCALE_LINEAR)
+ADJUSTED_MOTOR_MAX_DUTY_CYCLE = ADJUSTED_PWMS['motor_max_pwm']
+master_config.ADJUSTED_MOTOR_MAX_DUTY_CYCLE = ADJUSTED_MOTOR_MAX_DUTY_CYCLE
+ADJUSTED_MOTOR_MIN_DUTY_CYCLE = ADJUSTED_PWMS['motor_min_pwm']
+master_config.ADJUSTED_MOTOR_MIN_DUTY_CYCLE = ADJUSTED_MOTOR_MIN_DUTY_CYCLE
+ADJUSTED_STEERING_MAX_DUTY_CYCLE = ADJUSTED_PWMS['steering_max_pwm']
+master_config.ADJUSTED_STEERING_MAX_DUTY_CYCLE = ADJUSTED_STEERING_MAX_DUTY_CYCLE
+ADJUSTED_STEERING_MIN_DUTY_CYCLE = ADJUSTED_PWMS['steering_min_pwm']
+master_config.ADJUSTED_STEERING_MIN_DUTY_CYCLE = ADJUSTED_STEERING_MIN_DUTY_CYCLE
+MOTOR_PWM_NORMALIZATION_FACTOR = ADJUSTED_MOTOR_MAX_DUTY_CYCLE - ADJUSTED_MOTOR_MIN_DUTY_CYCLE
+master_config.MOTOR_PWM_NORMALIZATION_FACTOR = MOTOR_PWM_NORMALIZATION_FACTOR
+STEERING_PWM_NORMALIZATION_FACTOR = ADJUSTED_STEERING_MAX_DUTY_CYCLE - ADJUSTED_STEERING_MIN_DUTY_CYCLE
+master_config.STEERING_PWM_NORMALIZATION_FACTOR = STEERING_PWM_NORMALIZATION_FACTOR
+
 def main():
     print(calculate_adjusted_pwm_range(0.17))
+    print(master_config.ADJUSTED_MOTOR_MAX_DUTY_CYCLE)
+    print(master_config.ADJUSTED_STEERING_MAX_DUTY_CYCLE)
 
 if __name__ == '__main__':
     main()
