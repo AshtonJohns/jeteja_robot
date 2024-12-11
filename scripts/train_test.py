@@ -114,7 +114,7 @@ lr = 0.002
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 loss_fn = standard_loss
 epochs = 15
-patience = 5
+#patience = 10 #Used for early stopping
 best_loss = float('inf')  # Best loss on test data
 best_counter = 0
 train_losses = []
@@ -146,9 +146,10 @@ for t in range(epochs):
     else:
         best_counter += 1
         print(f"{best_counter} epochs since best model")
-        if best_counter >= patience:
-            print("Early stopping triggered!")
-            break
+        # Commenting out early stopping mechanism
+        # if best_counter >= patience:
+        #     print("Early stopping triggered!")
+        #     break
 
 print("Optimization Done!")
 
